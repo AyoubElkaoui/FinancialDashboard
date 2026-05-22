@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+// Vercel: NEXT_PUBLIC_API_URL = "/_/backend"
+// Lokaal dev: NEXT_PUBLIC_API_URL = "http://localhost:3001"
+// Syntess-server: NEXT_PUBLIC_API_URL = "http://<server-ip>:3001"
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {

@@ -27,8 +27,8 @@ const envSchema = z.object({
   ADMIN_USERNAME: z.string().default("admin"),
   ADMIN_PASSWORD: z.string().default("admin"),
 
-  // CORS
-  CORS_ORIGINS: z.string().default("http://localhost:3000"),
+  // CORS — op Vercel alles toestaan (frontend zit op hetzelfde domein)
+  CORS_ORIGINS: z.string().default("*"),
 
   // Rate limiting
   RATE_LIMIT_MAX: z.coerce.number().default(200),

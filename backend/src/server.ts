@@ -52,7 +52,7 @@ export async function buildServer() {
   });
 
   await app.register(fastifyCors, {
-    origin: corsOrigins,
+    origin: corsOrigins[0] === "*" ? true : corsOrigins,
     credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
   });
