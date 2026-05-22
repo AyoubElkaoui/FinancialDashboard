@@ -1,0 +1,15 @@
+{
+  "name": "syntess-rapport",
+  "private": true,
+  "description": "Syntess Atrium rapportage dashboard",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "setup": "node scripts/setup.mjs",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "typecheck": "npm run typecheck --prefix backend && npm run build --prefix frontend -- --no-lint",
+    "clean": "rm -rf backend/node_modules frontend/node_modules backend/dist frontend/.next"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

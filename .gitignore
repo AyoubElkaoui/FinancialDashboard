@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+.next/
+out/
+
+# Env files — NOOIT committen
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+
+# Excel uploads
+*.xlsx
+*.xls
+
+# Test/temp
+/tmp/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# TypeScript build info
+*.tsbuildinfo
