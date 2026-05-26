@@ -1,7 +1,9 @@
 // Vercel: NEXT_PUBLIC_API_URL = "/_/backend"
 // Lokaal dev: NEXT_PUBLIC_API_URL = "http://localhost:3001"
 // Syntess-server: NEXT_PUBLIC_API_URL = "http://<server-ip>:3001"
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
+// Op Vercel: geen env var → lege string → relatieve URL naar Next.js API routes
+// Lokaal met Fastify backend: NEXT_PUBLIC_API_URL=http://localhost:3001 in .env.local
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
