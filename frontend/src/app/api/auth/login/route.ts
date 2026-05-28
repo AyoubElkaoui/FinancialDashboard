@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import * as argon2 from "argon2";
 import { db } from "@/lib/db";
+import { createSession, SESSION_COOKIE, SESSION_TTL_MS } from "@/lib/session";
+import { audit } from "@/lib/audit";
 
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(1).max(128),
 });
 
-// Step 1: verify email + password, return partial token for TOTP step
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parse = schema.safeParse(body);
@@ -18,14 +19,16 @@ export async function POST(req: NextRequest) {
 
   const { email, password } = parse.data;
 
-  // Check allowlist
   const allowed = await db.allowedEmail.findUnique({ where: { email } });
   if (!allowed) {
-    await new Promise((r) => setTimeout(r, 300)); // constant-time delay
+    await new Promise((r) => setTimeout(r, 300));
     return NextResponse.json({ error: "Ongeldig e-mailadres of wachtwoord" }, { status: 401 });
   }
 
-  const user = await db.user.findUnique({ where: { email } });
+  const user = await db.user.findUnique({
+    where: { email },
+    include: { databases: true },
+  });
   if (!user) {
     await new Promise((r) => setTimeout(r, 300));
     return NextResponse.json({ error: "Ongeldig e-mailadres of wachtwoord" }, { status: 401 });
@@ -37,18 +40,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ongeldig e-mailadres of wachtwoord" }, { status: 401 });
   }
 
-  // Partial cookie: short-lived, used for TOTP step OR first-time 2FA setup
+  // If TOTP is enabled, go to the TOTP step
+  if (user.totpEnabled) {
+    const response = NextResponse.json({ requiresTotp: true });
+    response.cookies.set("elmar_partial", user.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 15 * 60,
+      path: "/",
+    });
+    return response;
+  }
+
+  // 2FA not yet configured — log in directly
+  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? undefined;
+  const ua = req.headers.get("user-agent") ?? undefined;
+  const sessionToken = await createSession(user.id, ip ?? undefined, ua);
+  await audit(user.id, "LOGIN", { ip: ip ?? undefined });
+
   const response = NextResponse.json({
-    requiresTotp: user.totpEnabled,
-    requiresTotpSetup: !user.totpEnabled,
+    requiresTotp: false,
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      databases: user.databases.map((d) => d.database),
+    },
   });
 
-  response.cookies.set("elmar_partial", user.id, {
+  response.cookies.set(SESSION_COOKIE, sessionToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 15 * 60, // 15 minutes — enough to complete 2FA setup
+    maxAge: SESSION_TTL_MS / 1000,
     path: "/",
   });
+
   return response;
 }

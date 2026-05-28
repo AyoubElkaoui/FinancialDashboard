@@ -10,44 +10,81 @@ if (!connectionString) {
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
-async function main() {
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@elmar.nl";
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+type DB = "SERVICES" | "MAINTENANCE" | "INTERNATIONAL" | "KEYSER";
 
-  if (!adminPassword) {
-    console.error("SEED_ADMIN_PASSWORD env var is required");
-    process.exit(1);
+const USERS: {
+  email: string;
+  role: "ADMIN" | "VIEWER";
+  databases: DB[];
+}[] = [
+  {
+    email: "admin@elmar.nl",
+    role: "ADMIN",
+    databases: ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"],
+  },
+  {
+    email: "lilly@elmar.nl",
+    role: "VIEWER",
+    databases: ["MAINTENANCE"],
+  },
+  {
+    email: "pamela@elmar.nl",
+    role: "VIEWER",
+    databases: ["MAINTENANCE"],
+  },
+  {
+    email: "anissa@elmar.nl",
+    role: "VIEWER",
+    databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
+  },
+  {
+    email: "merve@elmar.nl",
+    role: "VIEWER",
+    databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
+  },
+  {
+    email: "brahim@elmar.nl",
+    role: "VIEWER",
+    databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
+  },
+];
+
+const PASSWORD = process.env.SEED_PASSWORD ?? "Elmar2026!";
+
+async function main() {
+  const hash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+
+  for (const u of USERS) {
+    // Upsert user
+    const user = await db.user.upsert({
+      where: { email: u.email },
+      update: { passwordHash: hash, role: u.role },
+      create: {
+        email: u.email,
+        passwordHash: hash,
+        role: u.role,
+      },
+    });
+
+    // Sync database access
+    await db.userDatabase.deleteMany({ where: { userId: user.id } });
+    await db.userDatabase.createMany({
+      data: u.databases.map((database) => ({ userId: user.id, database })),
+    });
+
+    // Ensure allowlist
+    await db.allowedEmail.upsert({
+      where: { email: u.email },
+      update: {},
+      create: { email: u.email },
+    });
+
+    const dbs = u.databases.join(", ");
+    console.log(`✓ ${u.email} (${u.role}) → ${dbs}`);
   }
 
-  const hash = await argon2.hash(adminPassword, { type: argon2.argon2id });
-
-  const admin = await db.user.upsert({
-    where: { email: adminEmail },
-    update: { passwordHash: hash },
-    create: {
-      email: adminEmail,
-      passwordHash: hash,
-      role: "ADMIN",
-      databases: {
-        create: [
-          { database: "SERVICES" },
-          { database: "MAINTENANCE" },
-          { database: "INTERNATIONAL" },
-          { database: "KEYSER" },
-        ],
-      },
-    },
-  });
-
-  await db.allowedEmail.upsert({
-    where: { email: adminEmail },
-    update: {},
-    create: { email: adminEmail },
-  });
-
-  console.log(`✓ Admin: ${admin.email}`);
-  console.log(`✓ Toegang tot: SERVICES, MAINTENANCE, INTERNATIONAL, KEYSER`);
-  console.log(`✓ Ga naar /2fa-setup na de eerste login om 2FA te activeren.`);
+  console.log(`\n✓ Wachtwoord voor alle accounts: ${PASSWORD}`);
+  console.log("✓ 2FA is zichtbaar maar nog niet vereist.");
 }
 
 main()
