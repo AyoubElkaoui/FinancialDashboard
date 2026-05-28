@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { useActiveDb } from "@/hooks/use-active-db";
-import { useViewType } from "@/hooks/use-view-type";
+import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import { CATEGORIE_LABELS } from "@/lib/mock/maintenance-data";
 import type { MaintenanceWerkbon, WerkbonCategorie, WerkbonStatus } from "@/lib/mock/maintenance-data";
 import { Download, Loader2, FileSpreadsheet } from "lucide-react";
@@ -402,6 +402,6 @@ function MaintenanceWerkbonnenInner() {
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function WerkbonnenPage() {
-  const viewType = useViewType();
+  const viewType = useViewTypeSafe();
   return <Suspense>{viewType === "CUSTOMER" ? <MaintenanceWerkbonnenInner /> : <WerkbonnenInner />}</Suspense>;
 }

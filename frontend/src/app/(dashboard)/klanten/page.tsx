@@ -11,7 +11,7 @@ import { FilterBar } from "@/components/filters/filter-bar";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { useActiveDb } from "@/hooks/use-active-db";
-import { useViewType } from "@/hooks/use-view-type";
+import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import type { MaintenanceKlant } from "@/lib/mock/maintenance-data";
 
 type Klant = Record<string, unknown>;
@@ -149,6 +149,6 @@ function MaintenanceKlantenInner() {
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function KlantenPage() {
-  const viewType = useViewType();
+  const viewType = useViewTypeSafe();
   return <Suspense>{viewType === "CUSTOMER" ? <MaintenanceKlantenInner /> : <KlantenInner />}</Suspense>;
 }

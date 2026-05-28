@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useViewType } from "@/hooks/use-view-type";
+import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import { useActiveDb } from "@/hooks/use-active-db";
 import { formatCurrency } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -270,7 +270,7 @@ function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function OmzetPage() {
-  const viewType = useViewType();
+  const viewType = useViewTypeSafe();
   const activeDb = useActiveDb();
   return viewType === "CUSTOMER" ? <MaintenanceOmzetPage /> : <ProjectOmzetPage activeDb={activeDb} />;
 }

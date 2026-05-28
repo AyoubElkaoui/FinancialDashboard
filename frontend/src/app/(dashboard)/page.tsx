@@ -21,7 +21,7 @@ import {
   Users, Clock, Activity,
 } from "lucide-react";
 import { useActiveDb } from "@/hooks/use-active-db";
-import { useViewType } from "@/hooks/use-view-type";
+import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import { useEffect, useState } from "react";
 import { MaintenanceDashboard } from "@/components/dashboard/maintenance-dashboard";
 
@@ -33,14 +33,16 @@ const ALL_WIDGETS = [
 ];
 
 function useWidgetPrefs() {
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(() => {
-    if (typeof window === "undefined") return Object.fromEntries(ALL_WIDGETS.map(w => [w, true]));
+  const [prefs, setPrefs] = useState<Record<string, boolean>>(
+    Object.fromEntries(ALL_WIDGETS.map(w => [w, true]))
+  );
+
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(PREFS_KEY);
-      if (raw) return JSON.parse(raw) as Record<string, boolean>;
+      if (raw) setPrefs(JSON.parse(raw) as Record<string, boolean>);
     } catch {}
-    return Object.fromEntries(ALL_WIDGETS.map(w => [w, true]));
-  });
+  }, []);
 
   useEffect(() => {
     function reread() {
@@ -120,11 +122,13 @@ function SectionHeader({ title, description, href, router }: { title: string; de
 }
 
 export default function DashboardPage() {
+  const viewType = useViewTypeSafe();
+  return viewType === "CUSTOMER" ? <MaintenanceDashboard /> : <ProjectDashboard />;
+}
+
+function ProjectDashboard() {
   const router    = useRouter();
   const activeDb  = useActiveDb();
-  const viewType  = useViewType();
-
-  if (viewType === "CUSTOMER") return <MaintenanceDashboard />;
   const { refetchInterval } = useAutoRefresh();
   const opts = { refetchInterval };
   const show = useWidgetPrefs();

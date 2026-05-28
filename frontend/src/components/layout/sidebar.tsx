@@ -11,9 +11,9 @@ import {
   Building2, ShoppingCart, BookOpen, Wrench,
   TrendingUp, Euro, Receipt, LineChart,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useViewType } from "@/hooks/use-view-type";
+import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 
 const NAV_PROJECT = [
   { href: "/",             label: "Dashboard",   icon: LayoutDashboard, exact: true },
@@ -68,14 +68,10 @@ export function Sidebar() {
     staleTime: 60_000,
   });
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-
   const isAdmin  = user?.role === "ADMIN";
   const logoSrc  = getLogo(user?.email);
-  const viewType = useViewType();
-  // Before hydration use NAV_PROJECT so server/client HTML matches; switch after mount
-  const NAV      = mounted && viewType === "CUSTOMER" ? NAV_CUSTOMER : NAV_PROJECT;
+  const viewType = useViewTypeSafe();
+  const NAV      = viewType === "CUSTOMER" ? NAV_CUSTOMER : NAV_PROJECT;
 
   return (
     <aside

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { inkoopApi } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 import { useActiveDb } from "@/hooks/use-active-db";
-import { useViewType } from "@/hooks/use-view-type";
+import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { CHART_COLORS } from "@/lib/chart-colors";
@@ -181,7 +181,7 @@ function KostenTabel({ rows, totaal }: { rows: KostensoortRow[]; totaal: number 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function KostenPage() {
-  const viewType = useViewType();
+  const viewType = useViewTypeSafe();
   const activeDb = useActiveDb();
   return viewType === "CUSTOMER"
     ? <MaintenanceKostenPage />

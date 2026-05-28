@@ -3,7 +3,7 @@
 import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useViewType } from "@/hooks/use-view-type";
+import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import { klantenApi } from "@/lib/api-client";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { StatCard } from "@/components/ui/stat-card";
@@ -294,7 +294,7 @@ function ProjectKlantDetail({ id }: { id: string }) {
 
 export default function KlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const viewType = useViewType();
+  const viewType = useViewTypeSafe();
   return viewType === "CUSTOMER"
     ? <MaintenanceKlantDetail id={id} />
     : <ProjectKlantDetail id={id} />;
