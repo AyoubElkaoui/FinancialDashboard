@@ -577,6 +577,252 @@ export function getElmarRapport(id: number, database: string): ElmarRapport | nu
   return computeRapport(project);
 }
 
+// ─── Derived data helpers (dashboard, facturen, inkoop) ──────────────────────
+
+export interface FlatFactuur {
+  ID: number;
+  FACTUURNUMMER: string;
+  DATUM: string;
+  VERVALDATUM: string;
+  KLANT: string;
+  PROJECT_ID: number;
+  PROJECTNUMMER: string;
+  BEDRAG_EXCL: number;
+  BTW: number;
+  TOTAALBEDRAG: number;
+  BETAALD_BEDRAG: number;
+  OPENSTAAND: number;
+  STATUS: FactuurStatus;
+  DAGEN_OVERDUE: number;
+}
+
+function daysOverdue(datum: string): number {
+  const due = new Date(datum);
+  due.setDate(due.getDate() + 30); // net 30 days
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.floor((today.getTime() - due.getTime()) / 86400000));
+}
+
+// Deterministic "random" based on string seed (no Math.random in server code)
+function deterministicVariance(seed: string, range = 0.4): number {
+  const hash = seed.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) & 0xffffff, 0);
+  return 1 + ((hash % 1000) / 1000 - 0.5) * range;
+}
+
+export function getDbFacturen(database: string): FlatFactuur[] {
+  const projects = ALL_PROJECTS[database as Database] ?? [];
+  const dbIdx = ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"].indexOf(database);
+  let id = (dbIdx + 1) * 1000;
+
+  return projects
+    .flatMap((project) =>
+      project.FACTUREN.map((f) => {
+        const openstaand = Math.max(0, Math.round((f.BEDRAG_EXCL - f.BETAALD_BEDRAG) * 100) / 100);
+        const vd = new Date(f.DATUM);
+        vd.setDate(vd.getDate() + 30);
+        return {
+          ID: ++id,
+          FACTUURNUMMER: f.FACTUURNUMMER,
+          DATUM: f.DATUM,
+          VERVALDATUM: vd.toISOString().slice(0, 10),
+          KLANT: project.KLANT,
+          PROJECT_ID: project.ID,
+          PROJECTNUMMER: project.PROJECTNUMMER,
+          BEDRAG_EXCL: f.BEDRAG_EXCL,
+          BTW: Math.round(f.BEDRAG_EXCL * 0.21 * 100) / 100,
+          TOTAALBEDRAG: Math.round(f.BEDRAG_EXCL * 1.21 * 100) / 100,
+          BETAALD_BEDRAG: f.BETAALD_BEDRAG,
+          OPENSTAAND: openstaand,
+          STATUS: f.STATUS,
+          DAGEN_OVERDUE: openstaand > 0 ? daysOverdue(f.DATUM) : 0,
+        };
+      })
+    )
+    .sort((a, b) => b.DATUM.localeCompare(a.DATUM));
+}
+
+export function getDbFacturenAging(database: string) {
+  const buckets: Record<string, { BUCKET: string; AANTAL: number; BEDRAG: number }> = {
+    current: { BUCKET: "current", AANTAL: 0, BEDRAG: 0 },
+    "1-30":  { BUCKET: "1-30",   AANTAL: 0, BEDRAG: 0 },
+    "31-60": { BUCKET: "31-60",  AANTAL: 0, BEDRAG: 0 },
+    "61-90": { BUCKET: "61-90",  AANTAL: 0, BEDRAG: 0 },
+    "90+":   { BUCKET: "90+",    AANTAL: 0, BEDRAG: 0 },
+  };
+  for (const f of getDbFacturen(database).filter((f) => f.OPENSTAAND > 0)) {
+    const d = f.DAGEN_OVERDUE;
+    const key = d <= 0 ? "current" : d <= 30 ? "1-30" : d <= 60 ? "31-60" : d <= 90 ? "61-90" : "90+";
+    buckets[key].AANTAL++;
+    buckets[key].BEDRAG = Math.round((buckets[key].BEDRAG + f.OPENSTAAND) * 100) / 100;
+  }
+  return Object.values(buckets).filter((b) => b.AANTAL > 0);
+}
+
+export function getDbOmzetPerMaand(database: string) {
+  const map = new Map<string, number>();
+  for (const f of getDbFacturen(database)) {
+    const [jaar, maand] = f.DATUM.split("-");
+    const key = `${jaar}-${maand}`;
+    map.set(key, (map.get(key) ?? 0) + f.BEDRAG_EXCL);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-18)
+    .map(([key, omzet]) => {
+      const [jaar, maand] = key.split("-");
+      return { JAAR: Number(jaar), MAAND: Number(maand), OMZET: Math.round(omzet * 100) / 100 };
+    });
+}
+
+export function getDbTopKlanten(database: string) {
+  const year = String(new Date().getFullYear());
+  const map = new Map<string, number>();
+  for (const f of getDbFacturen(database).filter((f) => f.DATUM.startsWith(year))) {
+    map.set(f.KLANT, (map.get(f.KLANT) ?? 0) + f.BEDRAG_EXCL);
+  }
+  for (const p of (ALL_PROJECTS[database as Database] ?? [])) {
+    if (!map.has(p.KLANT)) {
+      map.set(p.KLANT, p.AANNEEMSOM + p.MEERWERK);
+    }
+  }
+  return Array.from(map.entries())
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([klant, omzet]) => ({ KLANT: klant, OMZET: Math.round(omzet * 100) / 100 }));
+}
+
+export function getDbUrenPerMedewerker(database: string) {
+  const map = new Map<string, number>();
+  for (const p of (ALL_PROJECTS[database as Database] ?? [])) {
+    map.set(p.PROJECTLEIDER, (map.get(p.PROJECTLEIDER) ?? 0) + p.UREN_AANTAL);
+  }
+  return Array.from(map.entries())
+    .sort(([, a], [, b]) => b - a)
+    .map(([naam, uren]) => ({ NAAM: naam, UREN: Math.round(uren) }));
+}
+
+export function getDbUrenPerProject(database: string) {
+  return (ALL_PROJECTS[database as Database] ?? [])
+    .map((p) => ({
+      PROJECT: p.PROJECTNUMMER,
+      NAAM: p.NAAM.length > 32 ? p.NAAM.slice(0, 30) + "…" : p.NAAM,
+      UREN: p.UREN_AANTAL,
+    }))
+    .sort((a, b) => b.UREN - a.UREN)
+    .slice(0, 8);
+}
+
+export function getDbUrenStats(database: string) {
+  const projects = ALL_PROJECTS[database as Database] ?? [];
+  const total = projects.reduce((s, p) => s + p.UREN_AANTAL, 0);
+  const medewerkers = new Set(projects.map((p) => p.PROJECTLEIDER)).size;
+  return {
+    UREN_DEZE_WEEK:      Math.round(total / 52 * 10) / 10,
+    UREN_DEZE_MAAND:     Math.round(total / 12 * 10) / 10,
+    ACTIEVE_MEDEWERKERS: medewerkers,
+  };
+}
+
+export function getDbUrenPerDag(database: string) {
+  const projects = ALL_PROJECTS[database as Database] ?? [];
+  const total = projects.reduce((s, p) => s + p.UREN_AANTAL, 0);
+  const dailyBase = total / 250;
+
+  const result: { DATUM: string; UREN: number }[] = [];
+  const today = new Date();
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) continue;
+    const dateStr = d.toISOString().slice(0, 10);
+    const v = deterministicVariance(database + dateStr);
+    result.push({ DATUM: dateStr, UREN: Math.round(dailyBase * v * 10) / 10 });
+  }
+  return result;
+}
+
+const WERKBON_TYPES = ["STORING", "PREVENTIEF", "INSPECTIE", "REPARATIE", "INSTALLATIE"];
+const WERKBON_STATUSES = ["NIEUW", "IN_UITVOERING", "AFGEROND", "GEFACTUREERD"] as const;
+
+export function getDbRecenteWerkbonnen(database: string) {
+  const projects = ALL_PROJECTS[database as Database] ?? [];
+  const today = new Date();
+  return projects.slice(0, 6).map((p, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i * 2);
+    return {
+      BONNUMMER: `WB-${database.slice(0, 3)}-${String(i + 1).padStart(4, "0")}`,
+      OMSCHRIJVING: `${WERKBON_TYPES[i % WERKBON_TYPES.length]} – ${p.NAAM.slice(0, 35)}`,
+      DATUM: d.toISOString().slice(0, 10),
+      STATUS: WERKBON_STATUSES[i % WERKBON_STATUSES.length],
+      KLANT: p.KLANT,
+    };
+  });
+}
+
+const TAKEN = ["Montage", "Inspectie", "Meting", "Programmering", "Testen", "Inbedrijfstelling"];
+
+export function getDbRecenteUren(database: string) {
+  const projects = ALL_PROJECTS[database as Database] ?? [];
+  const today = new Date();
+  const result: {
+    DATUM: string; MEDEWERKER: string; GC_CODE: string;
+    WERK_CODE: string; WERK_NAAM: string; TAAK: string; AANTAL: number; OMSCHRIJVING: string;
+  }[] = [];
+  let i = 0;
+  for (const p of projects) {
+    for (let d = 0; d < 3 && result.length < 15; d++, i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - Math.floor(i / 3));
+      const initials = p.PROJECTLEIDER.split(" ").map((w: string) => w[0]).join("").toUpperCase();
+      const uren = Math.round((4 + deterministicVariance(database + p.PROJECTNUMMER + String(d)) * 3) * 2) / 2;
+      result.push({
+        DATUM: date.toISOString().slice(0, 10),
+        MEDEWERKER: p.PROJECTLEIDER,
+        GC_CODE: initials,
+        WERK_CODE: p.PROJECTNUMMER,
+        WERK_NAAM: p.NAAM,
+        TAAK: TAKEN[i % TAKEN.length],
+        AANTAL: Math.max(1, Math.min(8, uren)),
+        OMSCHRIJVING: `${TAKEN[i % TAKEN.length]} werkzaamheden`,
+      });
+    }
+  }
+  return result.sort((a, b) => b.DATUM.localeCompare(a.DATUM));
+}
+
+export function getDbInkoopPerKostensoort(database: string) {
+  const projects = ALL_PROJECTS[database as Database] ?? [];
+  const totalKosten = projects.reduce((s, p) => s + p.DIRECTE_KOSTEN, 0);
+  return [
+    { KOSTENSOORT: "Materialen & hulpstoffen", pct: 0.44 },
+    { KOSTENSOORT: "Onderaanneming",           pct: 0.26 },
+    { KOSTENSOORT: "Huur materieel",           pct: 0.12 },
+    { KOSTENSOORT: "Transportkosten",          pct: 0.08 },
+    { KOSTENSOORT: "Overige kosten",           pct: 0.10 },
+  ].map(({ KOSTENSOORT, pct }) => ({
+    KOSTENSOORT,
+    BEDRAG: Math.round(totalKosten * pct * 100) / 100,
+  }));
+}
+
+export function getDbDashboardKpis(database: string) {
+  const projecten = getElmarProjecten(database);
+  const facturen  = getDbFacturen(database);
+  const year  = String(new Date().getFullYear());
+  const month = `${year}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+
+  return {
+    omzetDezeMonth:  { OMZET: facturen.filter((f) => f.DATUM.startsWith(month)).reduce((s, f) => s + f.BEDRAG_EXCL, 0) },
+    omzetDitJaar:    { OMZET: facturen.filter((f) => f.DATUM.startsWith(year)).reduce((s, f) => s + f.BEDRAG_EXCL, 0) },
+    openProjecten:   { CNT: projecten.filter((p) => p.STATUS === "ACTIEF").length },
+    openWerkbonnen:  { CNT: Math.round(projecten.filter((p) => p.STATUS === "ACTIEF").length * 1.8) },
+    openDebiteuren:  { BEDRAG: facturen.filter((f) => f.OPENSTAAND > 0).reduce((s, f) => s + f.OPENSTAAND, 0) },
+  };
+}
+
 /**
  * Get all projects for a database with computed summary fields.
  */

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import { useActiveDb } from "@/hooks/use-active-db";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Factuur = Record<string, unknown>;
@@ -61,6 +62,7 @@ const AGING_LABELS: Record<string, string> = {
 function FacturenInner() {
   const { get, setParams, resetParams } = useQueryParams();
   const { refetchInterval } = useAutoRefresh();
+  const activeDb  = useActiveDb();
   const activeTab = get("tab") ?? "alle";
 
   const params = {
@@ -73,13 +75,13 @@ function FacturenInner() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["facturen", params],
+    queryKey: ["facturen", params, activeDb],
     queryFn: () => facturenApi.list(params),
     refetchInterval,
   });
 
   const { data: aging } = useQuery({
-    queryKey: ["facturen", "aging"],
+    queryKey: ["facturen", "aging", activeDb],
     queryFn: facturenApi.aging,
     refetchInterval,
   });

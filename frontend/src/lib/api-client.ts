@@ -9,12 +9,25 @@ class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // Auto-inject active database for all v1 data API calls
+  let finalPath = path;
+  if (path.startsWith("/api/v1/") && !path.startsWith("/api/v1/auth")) {
+    try {
+      const url = new URL(path, window.location.origin);
+      if (!url.searchParams.has("database")) {
+        const db = localStorage.getItem("elmar_active_db");
+        if (db) url.searchParams.set("database", db);
+      }
+      finalPath = url.pathname + (url.search || "");
+    } catch { /* ignore — falls back to original path */ }
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init.headers as Record<string, string>),
   };
 
-  const res = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  const res = await fetch(finalPath, { ...init, headers, credentials: "same-origin" });
 
   if (res.status === 401) {
     window.location.href = "/login";

@@ -20,6 +20,7 @@ import {
   AlertCircle, Euro, ArrowRight, CheckCircle2,
   Users, Clock, Activity,
 } from "lucide-react";
+import { useActiveDb } from "@/hooks/use-active-db";
 
 const MAANDEN = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
 
@@ -79,21 +80,22 @@ function SectionHeader({ title, description, href, router }: { title: string; de
 
 export default function DashboardPage() {
   const router = useRouter();
+  const activeDb = useActiveDb();
   const { refetchInterval } = useAutoRefresh();
   const opts = { refetchInterval };
 
-  const { data: kpis,      isLoading: kpisLoading }  = useQuery({ queryKey: ["dashboard","kpis"],                queryFn: dashboardApi.kpis,              ...opts });
-  const { data: omzetData, isLoading: omzetLoading }  = useQuery({ queryKey: ["dashboard","omzet-per-maand"],     queryFn: dashboardApi.omzetPerMaand,     ...opts });
-  const { data: topKlanten }                          = useQuery({ queryKey: ["dashboard","top-klanten"],         queryFn: dashboardApi.topKlanten,        ...opts });
-  const { data: recenteWerkbonnen }                   = useQuery({ queryKey: ["dashboard","recente-werkbonnen"],  queryFn: dashboardApi.recenteWerkbonnen, ...opts });
-  const { data: urenStats }                           = useQuery({ queryKey: ["dashboard","uren-stats"],          queryFn: dashboardApi.urenStats,         ...opts });
-  const { data: urenPerDag }                          = useQuery({ queryKey: ["dashboard","uren-per-dag"],        queryFn: dashboardApi.urenPerDag,        ...opts });
-  const { data: urenPerMedew }                        = useQuery({ queryKey: ["dashboard","uren-per-medewerker"], queryFn: dashboardApi.urenPerMedewerker, ...opts });
-  const { data: urenPerProj }                         = useQuery({ queryKey: ["dashboard","uren-per-project"],    queryFn: dashboardApi.urenPerProject,    ...opts });
-  const { data: recenteUren }                         = useQuery({ queryKey: ["dashboard","recente-uren"],        queryFn: dashboardApi.recenteUren,       ...opts });
-  const { data: aging }                               = useQuery({ queryKey: ["facturen","aging"],                queryFn: facturenApi.aging,              ...opts });
-  const { data: inkoopKs }                            = useQuery({ queryKey: ["inkoop","per-kostensoort"],        queryFn: inkoopApi.perKostensoort,       ...opts });
-  const { data: openFacturen }                        = useQuery({ queryKey: ["facturen","open-dashboard"],       queryFn: () => facturenApi.list({ status:"open", pageSize:6, sortBy:"DAGEN_OVERDUE", sortDir:"DESC" }), ...opts });
+  const { data: kpis,      isLoading: kpisLoading }  = useQuery({ queryKey: ["dashboard","kpis",               activeDb], queryFn: dashboardApi.kpis,              ...opts });
+  const { data: omzetData, isLoading: omzetLoading }  = useQuery({ queryKey: ["dashboard","omzet-per-maand",   activeDb], queryFn: dashboardApi.omzetPerMaand,     ...opts });
+  const { data: topKlanten }                          = useQuery({ queryKey: ["dashboard","top-klanten",        activeDb], queryFn: dashboardApi.topKlanten,        ...opts });
+  const { data: recenteWerkbonnen }                   = useQuery({ queryKey: ["dashboard","recente-werkbonnen", activeDb], queryFn: dashboardApi.recenteWerkbonnen, ...opts });
+  const { data: urenStats }                           = useQuery({ queryKey: ["dashboard","uren-stats",         activeDb], queryFn: dashboardApi.urenStats,         ...opts });
+  const { data: urenPerDag }                          = useQuery({ queryKey: ["dashboard","uren-per-dag",       activeDb], queryFn: dashboardApi.urenPerDag,        ...opts });
+  const { data: urenPerMedew }                        = useQuery({ queryKey: ["dashboard","uren-per-medewerker",activeDb], queryFn: dashboardApi.urenPerMedewerker, ...opts });
+  const { data: urenPerProj }                         = useQuery({ queryKey: ["dashboard","uren-per-project",   activeDb], queryFn: dashboardApi.urenPerProject,    ...opts });
+  const { data: recenteUren }                         = useQuery({ queryKey: ["dashboard","recente-uren",       activeDb], queryFn: dashboardApi.recenteUren,       ...opts });
+  const { data: aging }                               = useQuery({ queryKey: ["facturen","aging",               activeDb], queryFn: facturenApi.aging,              ...opts });
+  const { data: inkoopKs }                            = useQuery({ queryKey: ["inkoop","per-kostensoort",       activeDb], queryFn: inkoopApi.perKostensoort,       ...opts });
+  const { data: openFacturen }                        = useQuery({ queryKey: ["facturen","open-dashboard",      activeDb], queryFn: () => facturenApi.list({ status:"open", pageSize:6, sortBy:"DAGEN_OVERDUE", sortDir:"DESC" }), ...opts });
 
   // ─── Derived ────────────────────────────────────────────────────────────────
   type K = { omzetDezeMonth: { OMZET: number }; omzetDitJaar: { OMZET: number }; openProjecten: { CNT: number }; openWerkbonnen: { CNT: number }; openDebiteuren: { BEDRAG: number } };

@@ -1,2 +1,6 @@
-import { mockUrenPerProject } from "@/lib/mock/handlers";
-export async function GET() { return Response.json(mockUrenPerProject()); }
+import type { NextRequest } from "next/server";
+import { getDbUrenPerProject } from "@/lib/mock/elmar-data";
+export async function GET(req: NextRequest) {
+  const database = req.nextUrl.searchParams.get("database") ?? "SERVICES";
+  return Response.json(getDbUrenPerProject(database));
+}

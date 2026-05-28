@@ -7,6 +7,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { DB_CHANGE_EVENT } from "@/hooks/use-active-db";
 
 const ROUTE_MAP: Record<string, string> = {
   "/":                    "Dashboard",
@@ -149,6 +150,7 @@ export function Topbar() {
                     } catch {
                       // ignore localStorage errors
                     }
+                    window.dispatchEvent(new CustomEvent(DB_CHANGE_EVENT, { detail: db }));
                     queryClient.invalidateQueries();
                     toast.success(`Database gewisseld naar ${DB_LABELS[db] ?? db}`);
                   }}
