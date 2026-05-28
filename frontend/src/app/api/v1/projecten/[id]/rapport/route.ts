@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getElmarRapport } from "@/lib/mock/elmar-data";
-import { db } from "@/lib/db";
+import { getProjectInput } from "@/lib/mock/project-inputs-store";
 
 export async function GET(
   request: NextRequest,
@@ -12,21 +12,13 @@ export async function GET(
   const base = getElmarRapport(Number(id), database);
   if (!base) return Response.json({ error: "Project niet gevonden" }, { status: 404 });
 
-  // Apply any user-saved overrides from Neon
-  let input = null;
-  try {
-    input = await db.projectInput.findUnique({
-      where: { database_projectCode: { database: database as never, projectCode: base.PROJECTNUMMER } },
-    });
-  } catch { /* DB unreachable — serve mock data as-is */ }
-
+  const input = getProjectInput(database, base.PROJECTNUMMER);
   if (!input) return Response.json({ ...base, hasOverrides: false });
 
-  // Override fields and recompute derived values
-  const UREN_AANTAL   = input.urenAantal   ?? base.UREN_AANTAL;
-  const UREN_TARIEF   = input.urenTarief   ?? base.UREN_TARIEF;
+  const UREN_AANTAL    = input.urenAantal   ?? base.UREN_AANTAL;
+  const UREN_TARIEF    = input.urenTarief   ?? base.UREN_TARIEF;
   const ALG_KOSTEN_PCT = input.algKostenPct ?? base.ALG_KOSTEN_PCT;
-  const OPMERKINGEN   = input.opmerkingen  ?? base.OPMERKINGEN;
+  const OPMERKINGEN    = input.opmerkingen  ?? base.OPMERKINGEN;
 
   const INDIRECTE_KOSTEN = UREN_AANTAL * UREN_TARIEF;
   const ALG_KOSTEN       = Math.round(base.DIRECTE_KOSTEN * ALG_KOSTEN_PCT / 100 * 100) / 100;

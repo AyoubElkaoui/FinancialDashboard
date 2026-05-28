@@ -1,18 +1,9 @@
-import { db } from "./db";
-import type { Database } from "@prisma/client";
+import type { Database } from "@/lib/prisma-types";
 
 export async function audit(
-  userId: string,
-  action: string,
-  opts?: { database?: Database; detail?: string; ip?: string }
+  _userId: string,
+  _action: string,
+  _opts?: { database?: Database; detail?: string; ip?: string }
 ) {
-  await db.auditLog.create({
-    data: {
-      userId,
-      action,
-      database: opts?.database,
-      detail: opts?.detail,
-      ip: opts?.ip,
-    },
-  });
+  // No-op in demo deployment — no database to write to.
 }
