@@ -10,6 +10,7 @@ import { DataTable } from "@/components/tables/data-table";
 import { FilterBar } from "@/components/filters/filter-bar";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import { useActiveDb } from "@/hooks/use-active-db";
 
 type Klant = Record<string, unknown>;
 
@@ -38,6 +39,7 @@ function KlantenInner() {
   const router = useRouter();
   const { get, setParams, resetParams } = useQueryParams();
   const { refetchInterval } = useAutoRefresh();
+  const activeDb = useActiveDb();
 
   const params = {
     page: Number(get("page") ?? 1),
@@ -46,7 +48,7 @@ function KlantenInner() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["klanten", params],
+    queryKey: ["klanten", activeDb, params],
     queryFn: () => klantenApi.list(params),
     refetchInterval,
   });

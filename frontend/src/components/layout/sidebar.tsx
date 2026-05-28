@@ -8,14 +8,19 @@ import {
   LayoutDashboard, FolderKanban, FileText,
   Users, BarChart3, ChevronLeft, ChevronRight,
   Shield, ClipboardList, HelpCircle, Settings2,
+  Building2, ShoppingCart, BookOpen, Wrench,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 const NAV = [
-  { href: "/",          label: "Dashboard",  icon: LayoutDashboard, exact: true },
-  { href: "/projecten", label: "Projecten",  icon: FolderKanban },
-  { href: "/facturen",  label: "Facturen",   icon: FileText },
+  { href: "/",           label: "Dashboard",   icon: LayoutDashboard, exact: true },
+  { href: "/projecten",  label: "Projecten",   icon: FolderKanban },
+  { href: "/facturen",   label: "Facturen",    icon: FileText },
+  { href: "/werkbonnen", label: "Werkbonnen",  icon: Wrench },
+  { href: "/klanten",    label: "Klanten",     icon: Building2 },
+  { href: "/inkoop",     label: "Inkoop",      icon: ShoppingCart },
+  { href: "/grootboek",  label: "Grootboek",   icon: BookOpen },
   { href: "/rapportages", label: "Rapportages", icon: BarChart3 },
   { href: "/faq",         label: "FAQ",         icon: HelpCircle },
   { href: "/instellingen", label: "Instellingen", icon: Settings2 },

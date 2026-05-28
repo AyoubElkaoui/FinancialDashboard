@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import { useActiveDb } from "@/hooks/use-active-db";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { getChartColor } from "@/lib/chart-colors";
 
@@ -29,6 +30,7 @@ const columns: ColumnDef<Inkoop>[] = [
 function InkoopInner() {
   const { get, setParams, resetParams } = useQueryParams();
   const { refetchInterval } = useAutoRefresh();
+  const activeDb = useActiveDb();
 
   const params = {
     page: Number(get("page") ?? 1),
@@ -39,13 +41,13 @@ function InkoopInner() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["inkoop", params],
+    queryKey: ["inkoop", activeDb, params],
     queryFn: () => inkoopApi.list(params),
     refetchInterval,
   });
 
   const { data: perKostensoort } = useQuery({
-    queryKey: ["inkoop", "per-kostensoort"],
+    queryKey: ["inkoop", activeDb, "per-kostensoort"],
     queryFn: inkoopApi.perKostensoort,
     refetchInterval,
   });

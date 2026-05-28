@@ -77,6 +77,7 @@ export default function InstellingenPage() {
     setPrefs(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event("elmar-prefs-change"));
     } catch {}
     toast.success(`${value ? "Weergegeven" : "Verborgen"}: ${DASHBOARD_WIDGETS.find((w) => w.id === id)?.label}`);
   };
@@ -88,7 +89,10 @@ export default function InstellingenPage() {
     const newVal = !allOn;
     const updated = Object.fromEntries(DASHBOARD_WIDGETS.map((w) => [w.id, newVal]));
     setPrefs(updated);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event("elmar-prefs-change"));
+    } catch {}
     toast.success(newVal ? "Alle widgets weergegeven" : "Alle widgets verborgen");
   };
 

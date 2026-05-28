@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import { useActiveDb } from "@/hooks/use-active-db";
 
 type Mutatie = Record<string, unknown>;
 type Resultaat = Record<string, unknown>;
@@ -58,6 +59,7 @@ const resultaatColumns: ColumnDef<Resultaat>[] = [
 function GrootboekInner() {
   const { get, setParams } = useQueryParams();
   const { refetchInterval } = useAutoRefresh();
+  const activeDb  = useActiveDb();
   const activeTab = get("tab") ?? "mutaties";
 
   const mutatieParams = {
@@ -67,20 +69,20 @@ function GrootboekInner() {
   };
 
   const { data: rubrieken } = useQuery({
-    queryKey: ["grootboek", "rubrieken"],
+    queryKey: ["grootboek", activeDb, "rubrieken"],
     queryFn: grootboekApi.rubrieken,
     staleTime: 300_000,
   });
 
   const { data: mutaties, isLoading: mutatiesLoading } = useQuery({
-    queryKey: ["grootboek", "mutaties", mutatieParams],
+    queryKey: ["grootboek", activeDb, "mutaties", mutatieParams],
     queryFn: () => grootboekApi.mutaties(mutatieParams),
     refetchInterval,
     enabled: activeTab === "mutaties",
   });
 
   const { data: resultaat, isLoading: resultaatLoading } = useQuery({
-    queryKey: ["grootboek", "resultaat"],
+    queryKey: ["grootboek", activeDb, "resultaat"],
     queryFn: grootboekApi.resultaat,
     refetchInterval,
     enabled: activeTab === "resultaat",

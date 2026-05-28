@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
+import { useActiveDb } from "@/hooks/use-active-db";
 import { Download, Loader2, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 
@@ -138,6 +139,7 @@ function WerkbonnenInner() {
   const router = useRouter();
   const { get, setParams, resetParams } = useQueryParams();
   const { refetchInterval } = useAutoRefresh();
+  const activeDb = useActiveDb();
   const [exporting, setExporting] = useState(false);
 
   const params = {
@@ -151,7 +153,7 @@ function WerkbonnenInner() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["werkbonnen", params],
+    queryKey: ["werkbonnen", activeDb, params],
     queryFn:  () => werkbonnenApi.list(params),
     refetchInterval,
   });

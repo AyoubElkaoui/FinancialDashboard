@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowLeft, Euro, TrendingUp, CheckCircle2, Calculator,
   Pencil, RotateCcw, Save, Loader2, ShieldCheck, AlertTriangle,
+  LayoutGrid, Table2, Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ElmarRapport } from "@/lib/mock/elmar-data";
@@ -168,6 +169,15 @@ function BerekenenPanel({
       </CardHeader>
 
       <CardContent>
+        {/* Formula info */}
+        <div className="flex items-start gap-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 p-3 mb-4">
+          <Info className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+            <strong>Brutomarge = Gefactureerd − Totale kosten</strong> &nbsp;·&nbsp; <strong>Marge % = Brutomarge ÷ Gefactureerd × 100</strong><br />
+            Totale kosten = Directe kosten + (Uren × Tarief) + Alg. kosten %. Pas uren, tarief of alg. kosten % aan om de marge te beïnvloeden.
+          </p>
+        </div>
+
         {/* Current values summary */}
         <div className="text-sm space-y-1 mb-4">
           <Row label="Uren aantal" value={`${rapport.UREN_AANTAL} uur`} />
@@ -242,6 +252,190 @@ function BerekenenPanel({
   );
 }
 
+// ─── Spreadsheet / Excel view ────────────────────────────────────────────────
+
+function SpreadsheetView({ r }: { r: Rapport }) {
+  const groups: { title: string; rows: [string, string | React.ReactNode, string?][] }[] = [
+    {
+      title: "Projectinformatie",
+      rows: [
+        ["Projectnummer",  r.PROJECTNUMMER],
+        ["Naam",           r.NAAM],
+        ["Klant",          r.KLANT],
+        ["Projectleider",  r.PROJECTLEIDER],
+        ["Status",         <StatusBadge key="status" status={r.STATUS} />],
+        ["Database",       r.DATABASE],
+        ["Startdatum",     formatDate(r.STARTDATUM)],
+        ["Einddatum",      r.EINDDATUM ? formatDate(r.EINDDATUM) : "—"],
+      ],
+    },
+    {
+      title: "Opbrengsten",
+      rows: [
+        ["Aanneemsom",          formatCurrency(r.AANNEEMSOM)],
+        ["Meerwerk",            formatCurrency(r.MEERWERK)],
+        ["Totaal aanneemsom",   formatCurrency(r.TOTAAL_AANNEEMSOM), "font-bold"],
+        ["",                    ""],
+        ["Gefactureerd totaal", formatCurrency(r.GEFACTUREERD_TOTAAL)],
+        ["Betaald totaal",      formatCurrency(r.BETAALD_TOTAAL)],
+        ["Onbetaald",           formatCurrency(r.ONBETAALD_TOTAAL), r.ONBETAALD_TOTAAL > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""],
+        ["% Betaald",           formatPercentage(r.PCT_BETAALD)],
+      ],
+    },
+    {
+      title: "Kosten",
+      rows: [
+        ["Directe kosten",                              formatCurrency(r.DIRECTE_KOSTEN)],
+        [`Indirecte kosten  (${r.UREN_AANTAL} u × €${r.UREN_TARIEF})`, formatCurrency(r.INDIRECTE_KOSTEN)],
+        [`Algemene kosten (${r.ALG_KOSTEN_PCT}% van direct)`,          formatCurrency(r.ALG_KOSTEN)],
+        ["Totale kosten",  formatCurrency(r.TOTALE_KOSTEN), "font-bold"],
+      ],
+    },
+    {
+      title: "Marge",
+      rows: [
+        ["Brutomarge",   formatCurrency(r.BRUTOMARGE),  `font-bold ${r.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`],
+        ["Marge %",      formatPercentage(r.MARGE_PCT), r.MARGE_PCT >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"],
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Main spreadsheet grid */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b w-64">Veld</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b">Waarde</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((g, gi) => (
+                <>
+                  <tr key={`hdr-${gi}`} className="bg-slate-50 dark:bg-white/[0.03] border-b border-t">
+                    <td colSpan={2} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      {g.title}
+                    </td>
+                  </tr>
+                  {g.rows.map(([label, value, cls], ri) => (
+                    <tr
+                      key={`row-${gi}-${ri}`}
+                      className={`border-b last:border-0 ${ri % 2 === 0 ? "" : "bg-muted/20"} ${!label ? "h-1 py-0" : ""}`}
+                    >
+                      {label ? (
+                        <>
+                          <td className="px-4 py-2 text-muted-foreground font-medium whitespace-nowrap">{label}</td>
+                          <td className={`px-4 py-2 tabular-nums ${cls ?? ""}`}>{value}</td>
+                        </>
+                      ) : (
+                        <td colSpan={2} className="py-1" />
+                      )}
+                    </tr>
+                  ))}
+                </>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Termijnen */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="px-4 py-2.5 bg-muted/40 border-b">
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Termijnplan</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/20">
+                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">NR</th>
+                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Omschrijving</th>
+                <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Bedrag</th>
+                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Status</th>
+                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Verwacht</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.TERMIJNEN.map((t, i) => (
+                <tr key={t.NR} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                  <td className="px-4 py-2 text-muted-foreground">{t.NR}</td>
+                  <td className="px-4 py-2">{t.OMSCHRIJVING}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(t.BEDRAG)}</td>
+                  <td className="px-4 py-2">
+                    {t.NOG_TE_VERSTUREN
+                      ? <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">Te versturen</span>
+                      : <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Verstuurd</span>
+                    }
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground text-xs">{t.DATUM_VERWACHT ? formatDate(t.DATUM_VERWACHT) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Facturen */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="px-4 py-2.5 bg-muted/40 border-b">
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Facturen</span>
+        </div>
+        {r.FACTUREN.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">Geen facturen</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/20">
+                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Factuurnummer</th>
+                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Datum</th>
+                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Bedrag excl.</th>
+                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">BTW (21%)</th>
+                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Totaal incl.</th>
+                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Betaald</th>
+                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Openstaand</th>
+                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.FACTUREN.map((f, i) => {
+                  const open = Math.round((f.BEDRAG_EXCL - f.BETAALD_BEDRAG) * 100) / 100;
+                  const btw = Math.round(f.BEDRAG_EXCL * 0.21 * 100) / 100;
+                  return (
+                    <tr key={f.FACTUURNUMMER} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{f.FACTUURNUMMER}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{formatDate(f.DATUM)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(f.BEDRAG_EXCL)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">{formatCurrency(btw)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(f.BEDRAG_EXCL + btw)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(f.BETAALD_BEDRAG)}</td>
+                      <td className={`px-4 py-2 text-right tabular-nums ${open > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}`}>{formatCurrency(open)}</td>
+                      <td className="px-4 py-2"><StatusBadge status={f.STATUS} /></td>
+                    </tr>
+                  );
+                })}
+                {/* Totals row */}
+                <tr className="border-t bg-muted/30 font-semibold">
+                  <td className="px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground" colSpan={2}>Totaal</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(r.GEFACTUREERD_TOTAAL)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">{formatCurrency(Math.round(r.GEFACTUREERD_TOTAAL * 0.21 * 100) / 100)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Math.round(r.GEFACTUREERD_TOTAAL * 1.21 * 100) / 100)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(r.BETAALD_TOTAAL)}</td>
+                  <td className={`px-4 py-2 text-right tabular-nums ${r.ONBETAALD_TOTAAL > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>{formatCurrency(r.ONBETAALD_TOTAAL)}</td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjectRapportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -249,6 +443,7 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeDb, setActiveDb] = useState<string>("SERVICES");
+  const [detailView, setDetailView] = useState<"secties" | "spreadsheet">("secties");
 
   useEffect(() => {
     const qDb = searchParams.get("database");
@@ -317,9 +512,36 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
             {r.KLANT}{r.PROJECTLEIDER ? ` · Projectleider: ${r.PROJECTLEIDER}` : ""}
           </p>
         </div>
+        {/* View toggle */}
+        <div className="flex items-center rounded-md border overflow-hidden shrink-0">
+          <button
+            onClick={() => setDetailView("secties")}
+            title="Sectieweergave"
+            className={`flex items-center gap-1.5 h-8 px-3 text-xs transition-colors ${
+              detailView === "secties"
+                ? "bg-blue-600 text-white"
+                : "bg-background text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Secties</span>
+          </button>
+          <button
+            onClick={() => setDetailView("spreadsheet")}
+            title="Spreadsheetweergave"
+            className={`flex items-center gap-1.5 h-8 px-3 text-xs transition-colors border-l ${
+              detailView === "spreadsheet"
+                ? "bg-blue-600 text-white"
+                : "bg-background text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Table2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Spreadsheet</span>
+          </button>
+        </div>
       </div>
 
-      {/* 4 KPI cards */}
+      {/* 4 KPI cards — always visible */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Aanneemsom + Meerwerk" value={formatCurrency(r.TOTAAL_AANNEEMSOM)} sub={`incl. ${formatCurrency(r.MEERWERK)} meerwerk`} icon={Euro} color="blue" />
         <StatCard label="Brutomarge" value={formatCurrency(r.BRUTOMARGE)} sub={`${formatPercentage(r.MARGE_PCT)} van gefactureerd`} icon={TrendingUp} color={r.BRUTOMARGE >= 0 ? "green" : "red"} />
@@ -327,127 +549,135 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
         <StatCard label="Totale Kosten" value={formatCurrency(r.TOTALE_KOSTEN)} sub="direct + indirect + alg." icon={Calculator} color="slate" />
       </div>
 
-      {/* Main grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Section 1: Projectinformatie */}
-        <Card>
-          <CardHeader><CardTitle><SectionTitle>Projectinformatie</SectionTitle></CardTitle></CardHeader>
-          <CardContent className="space-y-1 text-sm">
-            <Row label="Projectnummer" value={r.PROJECTNUMMER} />
-            <Row label="Naam" value={r.NAAM} />
-            <Row label="Klant" value={r.KLANT} />
-            <Row label="Projectleider" value={r.PROJECTLEIDER} />
-            <Row label="Status" value={<StatusBadge status={r.STATUS} />} />
-            <Row label="Startdatum" value={formatDate(r.STARTDATUM)} />
-            <Row label="Einddatum" value={r.EINDDATUM ? formatDate(r.EINDDATUM) : "—"} />
-            <Row label="Database" value={<DbBadge db={r.DATABASE} />} />
-            {r.OPMERKINGEN && (
-              <>
+      {/* Spreadsheet view */}
+      {detailView === "spreadsheet" && <SpreadsheetView r={r} />}
+
+      {/* Sectie view */}
+      {detailView === "secties" && (
+        <>
+          {/* Main grid */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Section 1: Projectinformatie */}
+            <Card>
+              <CardHeader><CardTitle><SectionTitle>Projectinformatie</SectionTitle></CardTitle></CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <Row label="Projectnummer" value={r.PROJECTNUMMER} />
+                <Row label="Naam" value={r.NAAM} />
+                <Row label="Klant" value={r.KLANT} />
+                <Row label="Projectleider" value={r.PROJECTLEIDER} />
+                <Row label="Status" value={<StatusBadge status={r.STATUS} />} />
+                <Row label="Startdatum" value={formatDate(r.STARTDATUM)} />
+                <Row label="Einddatum" value={r.EINDDATUM ? formatDate(r.EINDDATUM) : "—"} />
+                <Row label="Database" value={<DbBadge db={r.DATABASE} />} />
+                {r.OPMERKINGEN && (
+                  <>
+                    <Divider />
+                    <div className="pt-1">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Opmerkingen</p>
+                      <p className="text-sm text-foreground leading-relaxed">{r.OPMERKINGEN}</p>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Section: Kosten */}
+            <Card>
+              <CardHeader><CardTitle><SectionTitle>Kosten</SectionTitle></CardTitle></CardHeader>
+              <CardContent className="text-sm">
+                <Row label="Directe kosten" value={formatCurrency(r.DIRECTE_KOSTEN)} />
+                <Row label={`Indirecte kosten (${r.UREN_AANTAL} uur × €${r.UREN_TARIEF}/uur)`} value={formatCurrency(r.INDIRECTE_KOSTEN)} />
+                <Row label={`Algemene kosten (${r.ALG_KOSTEN_PCT}% van directe kosten)`} value={formatCurrency(r.ALG_KOSTEN)} />
                 <Divider />
-                <div className="pt-1">
-                  <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Opmerkingen</p>
-                  <p className="text-sm text-foreground leading-relaxed">{r.OPMERKINGEN}</p>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Section 3: Kosten */}
-        <Card>
-          <CardHeader><CardTitle><SectionTitle>Kosten</SectionTitle></CardTitle></CardHeader>
-          <CardContent className="text-sm">
-            <Row label="Directe kosten" value={formatCurrency(r.DIRECTE_KOSTEN)} />
-            <Row label={`Indirecte kosten (${r.UREN_AANTAL} uur × €${r.UREN_TARIEF}/uur)`} value={formatCurrency(r.INDIRECTE_KOSTEN)} />
-            <Row label={`Algemene kosten (${r.ALG_KOSTEN_PCT}% van directe kosten)`} value={formatCurrency(r.ALG_KOSTEN)} />
-            <Divider />
-            <Row label="Totale kosten" value={formatCurrency(r.TOTALE_KOSTEN)} bold />
-            <Divider />
-            <Row label="Brutomarge" value={formatCurrency(r.BRUTOMARGE)} bold green={r.BRUTOMARGE >= 0} orange={r.BRUTOMARGE < 0} />
-            <Row label="Marge %" value={formatPercentage(r.MARGE_PCT)} green={r.MARGE_PCT >= 0} orange={r.MARGE_PCT < 0} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Section 2: Opbrengsten */}
-      <Card>
-        <CardHeader><CardTitle><SectionTitle>Opbrengsten</SectionTitle></CardTitle></CardHeader>
-        <CardContent className="text-sm space-y-1">
-          <Row label="Aanneemsom" value={formatCurrency(r.AANNEEMSOM)} />
-          <Row label="Meerwerk" value={formatCurrency(r.MEERWERK)} />
-          <Row label="Totaal aanneemsom" value={formatCurrency(r.TOTAAL_AANNEEMSOM)} bold />
-          <Divider />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-1 pb-2">Termijnplan</p>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/40">
-                  <Th>NR</Th><Th>Omschrijving</Th><Th right>Bedrag</Th><Th>Status</Th><Th>Verwacht</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.TERMIJNEN.map((t) => (
-                  <tr key={t.NR} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                    <Td className="text-muted-foreground">{t.NR}</Td>
-                    <Td>{t.OMSCHRIJVING}</Td>
-                    <Td right>{formatCurrency(t.BEDRAG)}</Td>
-                    <Td>
-                      {t.NOG_TE_VERSTUREN
-                        ? <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-orange-500/15 text-orange-700 dark:text-orange-400 ring-1 ring-orange-500/30">Te versturen</span>
-                        : <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30">Verstuurd</span>
-                      }
-                    </Td>
-                    <Td className="text-muted-foreground">{t.DATUM_VERWACHT ? formatDate(t.DATUM_VERWACHT) : "—"}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <Row label="Totale kosten" value={formatCurrency(r.TOTALE_KOSTEN)} bold />
+                <Divider />
+                <Row label="Brutomarge" value={formatCurrency(r.BRUTOMARGE)} bold green={r.BRUTOMARGE >= 0} orange={r.BRUTOMARGE < 0} />
+                <Row label="Marge %" value={formatPercentage(r.MARGE_PCT)} green={r.MARGE_PCT >= 0} orange={r.MARGE_PCT < 0} />
+              </CardContent>
+            </Card>
           </div>
-          <Divider />
-          <Row label="Totaal gefactureerd" value={formatCurrency(r.GEFACTUREERD_TOTAAL)} />
-          <Row label="Totaal betaald" value={formatCurrency(r.BETAALD_TOTAAL)} green />
-          <Row label="Onbetaald" value={formatCurrency(r.ONBETAALD_TOTAAL)} bold orange={r.ONBETAALD_TOTAAL > 0} />
-          <Row label="% betaald" value={formatPercentage(r.PCT_BETAALD)} />
-        </CardContent>
-      </Card>
 
-      {/* Section 4: Facturen */}
-      <Card>
-        <CardHeader><CardTitle><SectionTitle>Facturen</SectionTitle></CardTitle></CardHeader>
-        <CardContent className="p-0">
-          {r.FACTUREN.length === 0 ? (
-            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">Geen facturen gekoppeld</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-muted/40">
-                    <Th>Factuurnummer</Th><Th>Datum</Th><Th right>Bedrag excl.</Th>
-                    <Th right>Betaald</Th><Th right>Openstaand</Th><Th>Status</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.FACTUREN.map((f) => {
-                    const open = Math.round((f.BEDRAG_EXCL - f.BETAALD_BEDRAG) * 100) / 100;
-                    return (
-                      <tr key={f.FACTUURNUMMER} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                        <Td className="font-mono text-xs text-muted-foreground">{f.FACTUURNUMMER}</Td>
-                        <Td className="text-muted-foreground">{formatDate(f.DATUM)}</Td>
-                        <Td right>{formatCurrency(f.BEDRAG_EXCL)}</Td>
-                        <Td right className="text-emerald-600 dark:text-emerald-400">{formatCurrency(f.BETAALD_BEDRAG)}</Td>
-                        <Td right className={open > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}>{formatCurrency(open)}</Td>
-                        <Td><StatusBadge status={f.STATUS} /></Td>
+          {/* Section: Opbrengsten */}
+          <Card>
+            <CardHeader><CardTitle><SectionTitle>Opbrengsten</SectionTitle></CardTitle></CardHeader>
+            <CardContent className="text-sm space-y-1">
+              <Row label="Aanneemsom" value={formatCurrency(r.AANNEEMSOM)} />
+              <Row label="Meerwerk" value={formatCurrency(r.MEERWERK)} />
+              <Row label="Totaal aanneemsom" value={formatCurrency(r.TOTAAL_AANNEEMSOM)} bold />
+              <Divider />
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-1 pb-2">Termijnplan</p>
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-muted/40">
+                      <Th>NR</Th><Th>Omschrijving</Th><Th right>Bedrag</Th><Th>Status</Th><Th>Verwacht</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.TERMIJNEN.map((t) => (
+                      <tr key={t.NR} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                        <Td className="text-muted-foreground">{t.NR}</Td>
+                        <Td>{t.OMSCHRIJVING}</Td>
+                        <Td right>{formatCurrency(t.BEDRAG)}</Td>
+                        <Td>
+                          {t.NOG_TE_VERSTUREN
+                            ? <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-orange-500/15 text-orange-700 dark:text-orange-400 ring-1 ring-orange-500/30">Te versturen</span>
+                            : <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30">Verstuurd</span>
+                          }
+                        </Td>
+                        <Td className="text-muted-foreground">{t.DATUM_VERWACHT ? formatDate(t.DATUM_VERWACHT) : "—"}</Td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Divider />
+              <Row label="Totaal gefactureerd" value={formatCurrency(r.GEFACTUREERD_TOTAAL)} />
+              <Row label="Totaal betaald" value={formatCurrency(r.BETAALD_TOTAAL)} green />
+              <Row label="Onbetaald" value={formatCurrency(r.ONBETAALD_TOTAAL)} bold orange={r.ONBETAALD_TOTAAL > 0} />
+              <Row label="% betaald" value={formatPercentage(r.PCT_BETAALD)} />
+            </CardContent>
+          </Card>
 
-      {/* Section 5: Berekeningen aanpassen */}
+          {/* Section: Facturen */}
+          <Card>
+            <CardHeader><CardTitle><SectionTitle>Facturen</SectionTitle></CardTitle></CardHeader>
+            <CardContent className="p-0">
+              {r.FACTUREN.length === 0 ? (
+                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">Geen facturen gekoppeld</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b bg-muted/40">
+                        <Th>Factuurnummer</Th><Th>Datum</Th><Th right>Bedrag excl.</Th>
+                        <Th right>Betaald</Th><Th right>Openstaand</Th><Th>Status</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {r.FACTUREN.map((f) => {
+                        const open = Math.round((f.BEDRAG_EXCL - f.BETAALD_BEDRAG) * 100) / 100;
+                        return (
+                          <tr key={f.FACTUURNUMMER} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                            <Td className="font-mono text-xs text-muted-foreground">{f.FACTUURNUMMER}</Td>
+                            <Td className="text-muted-foreground">{formatDate(f.DATUM)}</Td>
+                            <Td right>{formatCurrency(f.BEDRAG_EXCL)}</Td>
+                            <Td right className="text-emerald-600 dark:text-emerald-400">{formatCurrency(f.BETAALD_BEDRAG)}</Td>
+                            <Td right className={open > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}>{formatCurrency(open)}</Td>
+                            <Td><StatusBadge status={f.STATUS} /></Td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Berekeningen aanpassen — always visible */}
       <BerekenenPanel rapport={r} projectId={id} database={activeDb} />
     </div>
   );
