@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getElmarRapport } from "@/lib/mock/elmar-data";
-import { getProjectInput } from "@/lib/mock/project-inputs-store";
+import { db } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
@@ -12,7 +12,14 @@ export async function GET(
   const base = getElmarRapport(Number(id), database);
   if (!base) return Response.json({ error: "Project niet gevonden" }, { status: 404 });
 
-  const input = getProjectInput(database, base.PROJECTNUMMER);
+  // Apply any user-saved overrides from Neon
+  let input = null;
+  try {
+    input = await db.projectInput.findUnique({
+      where: { database_projectCode: { database: database as never, projectCode: base.PROJECTNUMMER } },
+    });
+  } catch { /* DB unreachable — serve mock data as-is */ }
+
   if (!input) return Response.json({ ...base, hasOverrides: false });
 
   const UREN_AANTAL    = input.urenAantal   ?? base.UREN_AANTAL;
