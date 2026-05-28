@@ -14,6 +14,8 @@ const ROUTE_MAP: Record<string, string> = {
   "/projecten":           "Projecten",
   "/facturen":            "Facturen",
   "/rapportages":         "Rapportages",
+  "/faq":                 "FAQ",
+  "/instellingen":        "Instellingen",
   "/admin/gebruikers":    "Gebruikers",
   "/admin/audit":         "Auditlog",
 };

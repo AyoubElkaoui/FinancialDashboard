@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderKanban, FileText,
   Users, BarChart3, ChevronLeft, ChevronRight,
-  Shield, ClipboardList, HelpCircle,
+  Shield, ClipboardList, HelpCircle, Settings2,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +17,8 @@ const NAV = [
   { href: "/projecten", label: "Projecten",  icon: FolderKanban },
   { href: "/facturen",  label: "Facturen",   icon: FileText },
   { href: "/rapportages", label: "Rapportages", icon: BarChart3 },
-  { href: "/faq",       label: "FAQ",        icon: HelpCircle },
+  { href: "/faq",         label: "FAQ",         icon: HelpCircle },
+  { href: "/instellingen", label: "Instellingen", icon: Settings2 },
 ];
 
 const ADMIN_NAV = [
@@ -56,18 +57,19 @@ export function Sidebar() {
       >
         {collapsed ? (
           <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white font-bold text-base select-none"
-            style={{ background: "#1e2d45" }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white font-black text-base select-none shadow-lg"
+            style={{ background: "linear-gradient(135deg, #2563eb, #1d4ed8)", boxShadow: "0 0 16px rgba(59,130,246,0.35)" }}
           >
             E
           </div>
         ) : (
           <Image
             src="/logo.png"
-            width={120}
-            height={35}
-            alt="Elmar"
-            style={{ filter: "brightness(0) invert(1)" }}
+            width={160}
+            height={47}
+            alt="Elmar Services"
+            priority
+            style={{ filter: "brightness(0) invert(1)", maxWidth: "160px", height: "auto" }}
           />
         )}
       </div>

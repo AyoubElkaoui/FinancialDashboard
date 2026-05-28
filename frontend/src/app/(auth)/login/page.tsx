@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -141,16 +142,16 @@ export default function LoginPage() {
         ))}
 
         {/* Logo top-left */}
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl shadow-lg"
-            style={{ background: "linear-gradient(135deg, #2563eb, #1d4ed8)", boxShadow: "0 0 24px rgba(59,130,246,0.4)" }}
-          >
-            <span className="text-white font-black text-lg">E</span>
-          </div>
-          <div>
-            <p className="text-white font-bold text-base leading-none">Elmar Dashboard</p>
-            <p className="text-blue-400/60 text-xs leading-none mt-0.5">Syntess Atrium BI</p>
-          </div>
+        <div className="relative z-10">
+          <Image
+            src="/logo.png"
+            alt="Elmar Services"
+            width={180}
+            height={53}
+            priority
+            style={{ filter: "brightness(0) invert(1)", height: "auto" }}
+          />
+          <p className="text-blue-400/60 text-xs mt-1.5">Financieel Projectbeheer · Syntess Atrium BI</p>
         </div>
 
         {/* Bottom copy */}
@@ -178,11 +179,8 @@ export default function LoginPage() {
       <div className="flex w-full lg:w-[480px] shrink-0 items-center justify-center p-8 bg-white dark:bg-[#0b1120]">
         <div className="w-full max-w-sm space-y-8">
           {/* Mobile logo */}
-          <div className="flex items-center gap-3 lg:hidden">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600">
-              <span className="text-white font-black">E</span>
-            </div>
-            <span className="font-bold text-lg text-foreground">Elmar Dashboard</span>
+          <div className="flex items-center lg:hidden mb-2">
+            <Image src="/logo.png" alt="Elmar Services" width={140} height={41} style={{ height: "auto" }} />
           </div>
 
           {step === "credentials" ? (
