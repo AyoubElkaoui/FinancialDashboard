@@ -8,6 +8,7 @@ import { env, corsOrigins } from "./config.js";
 import { logger } from "./utils/logger.js";
 import { destroyPool } from "./db/pool.js";
 
+import { serviceTokenMiddleware } from "./middleware/service-token.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
@@ -98,6 +99,12 @@ export async function buildServer() {
     reply.code(error.statusCode ?? 500).send({
       error: env.NODE_ENV === "production" ? "Internal server error" : error.message,
     });
+  });
+
+  // Validate service token on all non-health routes
+  app.addHook("onRequest", async (request, reply) => {
+    if (request.url === "/api/v1/health") return;
+    await serviceTokenMiddleware(request, reply);
   });
 
   // ─── Routes ─────────────────────────────────────────────────────────────────

@@ -27,6 +27,10 @@ const envSchema = z.object({
   ADMIN_USERNAME: z.string().default("admin"),
   ADMIN_PASSWORD: z.string().default("admin"),
 
+  // Service token — required in production; Vercel frontend sends this header
+  // In dev/mock mode this defaults to a safe placeholder
+  SERVICE_TOKEN: z.string().default("dev-service-token-change-in-production"),
+
   // CORS — op Vercel alles toestaan (frontend zit op hetzelfde domein)
   CORS_ORIGINS: z.string().default("*"),
 

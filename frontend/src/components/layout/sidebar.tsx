@@ -5,29 +5,43 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, FolderKanban, ClipboardList,
-  FileText, ShoppingCart, BookOpen, Users, BarChart3,
-  ChevronLeft, ChevronRight,
+  LayoutDashboard, FolderKanban, FileText,
+  Users, BarChart3, ChevronLeft, ChevronRight,
+  Shield, ClipboardList, HelpCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 const NAV = [
-  { href: "/",           label: "Dashboard",   icon: LayoutDashboard, exact: true },
-  { href: "/projecten",  label: "Projecten",   icon: FolderKanban },
-  { href: "/werkbonnen", label: "Werkbonnen",  icon: ClipboardList },
-  { href: "/facturen",   label: "Facturen",    icon: FileText },
-  { href: "/inkoop",     label: "Inkoop",      icon: ShoppingCart },
-  { href: "/grootboek",  label: "Grootboek",   icon: BookOpen },
-  { href: "/klanten",    label: "Klanten",     icon: Users },
-  { href: "/rapportages","label": "Rapportages", icon: BarChart3 },
+  { href: "/",          label: "Dashboard",  icon: LayoutDashboard, exact: true },
+  { href: "/projecten", label: "Projecten",  icon: FolderKanban },
+  { href: "/facturen",  label: "Facturen",   icon: FileText },
+  { href: "/rapportages", label: "Rapportages", icon: BarChart3 },
+  { href: "/faq",       label: "FAQ",        icon: HelpCircle },
 ];
+
+const ADMIN_NAV = [
+  { href: "/admin/gebruikers", label: "Gebruikers",  icon: Users },
+  { href: "/admin/audit",      label: "Auditlog",    icon: ClipboardList },
+];
+
+interface CurrentUser {
+  role: "ADMIN" | "VIEWER";
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
+  const { data: user } = useQuery<CurrentUser>({
+    queryKey: ["current-user"],
+    queryFn: () => fetch("/api/auth/me").then((r) => r.json()),
+    staleTime: 60_000,
+  });
+
+  const isAdmin = user?.role === "ADMIN";
+
   return (
-    /* Hardcoded dark navy — not relying on CSS variable utilities */
     <aside
       style={{ background: "#0f1929", borderRight: "1px solid #1e2d45" }}
       className={cn(
@@ -38,10 +52,7 @@ export function Sidebar() {
       {/* Logo */}
       <div
         style={{ borderBottom: "1px solid #1e2d45" }}
-        className={cn(
-          "flex items-center h-14 shrink-0",
-          collapsed ? "justify-center" : "px-4"
-        )}
+        className={cn("flex items-center h-14 shrink-0", collapsed ? "justify-center" : "px-4")}
       >
         {collapsed ? (
           <div
@@ -71,51 +82,83 @@ export function Sidebar() {
         {NAV.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname.startsWith(href);
           return (
-            <Link
-              key={href}
-              href={href}
-              title={collapsed ? label : undefined}
-              style={active
-                ? { background: "#1e2d45", color: "#f1f5f9" }
-                : { color: "#7e95b0" }
-              }
-              className={cn(
-                "relative flex items-center rounded-md transition-all duration-100 group hover:bg-white/5",
-                collapsed ? "h-10 w-10 mx-auto justify-center" : "gap-2.5 px-2.5 py-2"
-              )}
-            >
-              {/* Active indicator */}
-              {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-blue-500 rounded-r-full" />
-              )}
-              <Icon
-                className="shrink-0"
-                style={{ width: 16, height: 16, color: active ? "#60a5fa" : undefined }}
-              />
-              {!collapsed && (
-                <span className={cn("text-sm font-medium", active && "text-white")}>{label}</span>
-              )}
-            </Link>
+            <NavLink key={href} href={href} label={label} icon={Icon} active={active} collapsed={collapsed} />
           );
         })}
+
+        {isAdmin && (
+          <>
+            {!collapsed && (
+              <p className="text-[10px] font-semibold uppercase tracking-widest px-2 pb-2 pt-4" style={{ color: "#374e6a" }}>
+                Beheer
+              </p>
+            )}
+            {collapsed && <div style={{ borderTop: "1px solid #1e2d45" }} className="my-2" />}
+            {ADMIN_NAV.map(({ href, label, icon: Icon }) => {
+              const active = pathname.startsWith(href);
+              return (
+                <NavLink key={href} href={href} label={label} icon={Icon} active={active} collapsed={collapsed} admin />
+              );
+            })}
+          </>
+        )}
       </nav>
 
       {/* Collapse toggle */}
       <div style={{ borderTop: "1px solid #1e2d45" }} className="shrink-0 p-2">
         <button
-          onClick={() => setCollapsed(c => !c)}
+          onClick={() => setCollapsed((c) => !c)}
           style={{ color: "#4a6080" }}
           className={cn(
             "flex items-center rounded-md hover:bg-white/5 transition-colors",
             collapsed ? "h-10 w-10 mx-auto justify-center" : "w-full gap-2 px-2.5 py-2"
           )}
         >
-          {collapsed
-            ? <ChevronRight className="h-4 w-4" />
-            : <><ChevronLeft className="h-4 w-4" /><span className="text-xs">Inklappen</span></>
-          }
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <><ChevronLeft className="h-4 w-4" /><span className="text-xs">Inklappen</span></>
+          )}
         </button>
       </div>
     </aside>
+  );
+}
+
+function NavLink({
+  href, label, icon: Icon, active, collapsed, admin,
+}: {
+  href: string; label: string; icon: React.ElementType; active: boolean; collapsed: boolean; admin?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      title={collapsed ? label : undefined}
+      style={
+        active
+          ? { background: "#1e2d45", color: "#f1f5f9" }
+          : admin
+          ? { color: "#5a7a99" }
+          : { color: "#7e95b0" }
+      }
+      className={cn(
+        "relative flex items-center rounded-md transition-all duration-100 group hover:bg-white/5",
+        collapsed ? "h-10 w-10 mx-auto justify-center" : "gap-2.5 px-2.5 py-2"
+      )}
+    >
+      {active && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-blue-500 rounded-r-full" />
+      )}
+      {admin && !active && !collapsed && (
+        <Shield className="absolute right-2 top-1/2 -translate-y-1/2 h-2.5 w-2.5 opacity-30" />
+      )}
+      <Icon
+        className="shrink-0"
+        style={{ width: 16, height: 16, color: active ? "#60a5fa" : undefined }}
+      />
+      {!collapsed && (
+        <span className={cn("text-sm font-medium", active && "text-white")}>{label}</span>
+      )}
+    </Link>
   );
 }

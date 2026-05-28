@@ -27,10 +27,8 @@ function RapportCard({ id, title }: { id: string; title: string }) {
   const handleDownload = async () => {
     setLoading(true);
     try {
-      const url = rapportagesApi.exportUrl(id, dateFrom || undefined, dateTo || undefined, "xlsx");
-      // Fetch with auth header
-      const token = localStorage.getItem("syntess_token");
-      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const url = rapportagesApi.exportUrl(id, "xlsx");
+      const res = await fetch(url, { credentials: "same-origin" });
       if (!res.ok) throw new Error("Export mislukt");
       const blob = await res.blob();
       const a = document.createElement("a");

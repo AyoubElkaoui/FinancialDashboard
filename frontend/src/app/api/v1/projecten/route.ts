@@ -1,17 +1,27 @@
 import type { NextRequest } from "next/server";
-import { mockProjectenList } from "@/lib/mock/handlers";
+import { getElmarProjecten } from "@/lib/mock/elmar-data";
 
 export async function GET(request: NextRequest) {
   const s = request.nextUrl.searchParams;
-  return Response.json(mockProjectenList({
-    page:     Number(s.get("page")     ?? 1),
-    pageSize: Number(s.get("pageSize") ?? 50),
-    search:   s.get("search")   ?? undefined,
-    status:   s.get("status")   ?? undefined,
-    klantId:  s.get("klantId")  ? Number(s.get("klantId"))  : undefined,
-    dateFrom: s.get("dateFrom") ?? undefined,
-    dateTo:   s.get("dateTo")   ?? undefined,
-    sortBy:   s.get("sortBy")   ?? undefined,
-    sortDir:  (s.get("sortDir") as "ASC"|"DESC") ?? undefined,
-  }));
+  const database = s.get("database") ?? "SERVICES";
+
+  const all = getElmarProjecten(database);
+
+  const search = s.get("search")?.toLowerCase() ?? "";
+  const filtered = search
+    ? all.filter(
+        (p) =>
+          p.NAAM.toLowerCase().includes(search) ||
+          p.PROJECTNUMMER.toLowerCase().includes(search) ||
+          p.KLANT.toLowerCase().includes(search)
+      )
+    : all;
+
+  return Response.json({
+    data: filtered,
+    total: filtered.length,
+    page: 1,
+    pageSize: filtered.length,
+    totalPages: 1,
+  });
 }
