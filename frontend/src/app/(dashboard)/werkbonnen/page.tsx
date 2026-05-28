@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { useActiveDb } from "@/hooks/use-active-db";
+import { useViewType } from "@/hooks/use-view-type";
+import { CATEGORIE_LABELS } from "@/lib/mock/maintenance-data";
+import type { MaintenanceWerkbon, WerkbonCategorie, WerkbonStatus } from "@/lib/mock/maintenance-data";
 import { Download, Loader2, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 
@@ -256,6 +259,149 @@ function WerkbonnenInner() {
   );
 }
 
+// ── Type B: Maintenance werkbonnen ────────────────────────────────────────────
+
+const MAINTENANCE_STATUSSEN: WerkbonStatus[] = ["AANGEMAAKT", "UITGEVOERD", "OPENSTAAND"];
+const MAINTENANCE_CATS: WerkbonCategorie[]   = ["ONDERHOUD", "EW", "CV", "SLUITING_300", "KLUSSEN_300"];
+
+const STATUS_COLORS: Record<WerkbonStatus, string> = {
+  UITGEVOERD: "text-emerald-600 dark:text-emerald-400",
+  OPENSTAAND: "text-orange-600 dark:text-orange-400",
+  AANGEMAAKT: "text-slate-500",
+};
+
+function MaintenanceWerkbonnenInner() {
+  const { get, setParams, resetParams } = useQueryParams();
+  const params = {
+    page:      Number(get("page") ?? 1),
+    pageSize:  Number(get("pageSize") ?? 50),
+    search:    get("search") ?? undefined,
+    status:    get("status") as WerkbonStatus | undefined,
+    categorie: get("categorie") as WerkbonCategorie | undefined,
+    klantId:   get("klantId") ?? undefined,
+    dateFrom:  get("dateFrom") ?? undefined,
+    dateTo:    get("dateTo") ?? undefined,
+  };
+
+  const qs = new URLSearchParams();
+  qs.set("page",     String(params.page));
+  qs.set("pageSize", String(params.pageSize));
+  if (params.search)    qs.set("search",    params.search);
+  if (params.status)    qs.set("status",    params.status);
+  if (params.categorie) qs.set("categorie", params.categorie);
+  if (params.klantId)   qs.set("klantId",   params.klantId);
+  if (params.dateFrom)  qs.set("dateFrom",  params.dateFrom);
+  if (params.dateTo)    qs.set("dateTo",    params.dateTo);
+
+  const { data, isLoading } = useQuery<{ data: MaintenanceWerkbon[]; total: number }>({
+    queryKey: ["maintenance", "werkbonnen", params],
+    queryFn:  () => fetch(`/api/v1/maintenance/werkbonnen?${qs}`).then(r => r.json()),
+  });
+
+  const { data: klanten } = useQuery<{ id: string; naam: string }[]>({
+    queryKey: ["maintenance", "klanten"],
+    queryFn:  () => fetch("/api/v1/maintenance/klanten").then(r => r.json()),
+    staleTime: 300_000,
+  });
+
+  const bons = data?.data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Werkbonnen</h1>
+          <p className="text-sm text-muted-foreground">{data?.total != null ? `${data.total} werkbonnen` : "Laden…"}</p>
+        </div>
+      </div>
+
+      <FilterBar
+        search={params.search}
+        onSearchChange={v => setParams({ search: v, page: "1" })}
+        dateFrom={params.dateFrom}
+        dateTo={params.dateTo}
+        onDateChange={(from, to) => setParams({ dateFrom: from, dateTo: to, page: "1" })}
+        onReset={resetParams}
+      >
+        <Select value={params.status ?? "alle"} onValueChange={v => setParams({ status: v === "alle" ? null : v, page: "1" })}>
+          <SelectTrigger className="h-8 w-36 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alle">Alle statussen</SelectItem>
+            {MAINTENANCE_STATUSSEN.map(s => <SelectItem key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={params.categorie ?? "alle"} onValueChange={v => setParams({ categorie: v === "alle" ? null : v, page: "1" })}>
+          <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder="Categorie" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alle">Alle categorieën</SelectItem>
+            {MAINTENANCE_CATS.map(c => <SelectItem key={c} value={c}>{CATEGORIE_LABELS[c]}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={params.klantId ?? "alle"} onValueChange={v => setParams({ klantId: v === "alle" ? null : v, page: "1" })}>
+          <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder="Klant" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alle">Alle klanten</SelectItem>
+            {(klanten ?? []).map(k => <SelectItem key={k.id} value={k.id}>{k.naam}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </FilterBar>
+
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 border-b">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Bon-ID</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Klant</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Categorie</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Omschrijving</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Technicus</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Datum</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Omzet</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">Laden…</td></tr>
+              ) : bons.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">Geen werkbonnen gevonden</td></tr>
+              ) : bons.map((b, i) => (
+                <tr key={b.id} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{b.id}</td>
+                  <td className="px-4 py-2.5 font-medium">{b.klantNaam}</td>
+                  <td className="px-4 py-2.5 text-xs"><span className="rounded-md bg-muted px-2 py-0.5">{CATEGORIE_LABELS[b.categorie]}</span></td>
+                  <td className="px-4 py-2.5 text-muted-foreground max-w-[200px] truncate">{b.omschrijving}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{b.technicus}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{b.datum}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-medium">
+                    {b.omzet > 0 ? formatCurrency(b.omzet) : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className={`px-4 py-2.5 text-xs font-semibold ${STATUS_COLORS[b.status]}`}>{b.status.charAt(0) + b.status.slice(1).toLowerCase()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {(data?.total ?? 0) > params.pageSize && (
+        <div className="flex justify-end gap-2 text-sm">
+          <button disabled={params.page <= 1} onClick={() => setParams({ page: String(params.page - 1) })}
+            className="px-3 py-1.5 rounded border hover:bg-muted disabled:opacity-40">Vorige</button>
+          <span className="px-3 py-1.5 text-muted-foreground">Pagina {params.page}</span>
+          <button disabled={(data?.total ?? 0) <= params.page * params.pageSize} onClick={() => setParams({ page: String(params.page + 1) })}
+            className="px-3 py-1.5 rounded border hover:bg-muted disabled:opacity-40">Volgende</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+
 export default function WerkbonnenPage() {
-  return <Suspense><WerkbonnenInner /></Suspense>;
+  const viewType = useViewType();
+  return <Suspense>{viewType === "CUSTOMER" ? <MaintenanceWerkbonnenInner /> : <WerkbonnenInner />}</Suspense>;
 }

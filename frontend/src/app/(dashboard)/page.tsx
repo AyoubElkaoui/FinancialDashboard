@@ -21,7 +21,9 @@ import {
   Users, Clock, Activity,
 } from "lucide-react";
 import { useActiveDb } from "@/hooks/use-active-db";
+import { useViewType } from "@/hooks/use-view-type";
 import { useEffect, useState } from "react";
+import { MaintenanceDashboard } from "@/components/dashboard/maintenance-dashboard";
 
 const PREFS_KEY = "elmar_dashboard_prefs";
 const ALL_WIDGETS = [
@@ -118,8 +120,11 @@ function SectionHeader({ title, description, href, router }: { title: string; de
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const activeDb = useActiveDb();
+  const router    = useRouter();
+  const activeDb  = useActiveDb();
+  const viewType  = useViewType();
+
+  if (viewType === "CUSTOMER") return <MaintenanceDashboard />;
   const { refetchInterval } = useAutoRefresh();
   const opts = { refetchInterval };
   const show = useWidgetPrefs();

@@ -9,20 +9,34 @@ import {
   Users, BarChart3, ChevronLeft, ChevronRight,
   Shield, ClipboardList, HelpCircle, Settings2,
   Building2, ShoppingCart, BookOpen, Wrench,
+  TrendingUp, Euro, Receipt, LineChart,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useViewType } from "@/hooks/use-view-type";
 
-const NAV = [
-  { href: "/",           label: "Dashboard",   icon: LayoutDashboard, exact: true },
-  { href: "/projecten",  label: "Projecten",   icon: FolderKanban },
-  { href: "/facturen",   label: "Facturen",    icon: FileText },
-  { href: "/werkbonnen", label: "Werkbonnen",  icon: Wrench },
-  { href: "/klanten",    label: "Klanten",     icon: Building2 },
-  { href: "/inkoop",     label: "Inkoop",      icon: ShoppingCart },
-  { href: "/grootboek",  label: "Grootboek",   icon: BookOpen },
-  { href: "/rapportages", label: "Rapportages", icon: BarChart3 },
-  { href: "/faq",         label: "FAQ",         icon: HelpCircle },
+const NAV_PROJECT = [
+  { href: "/",             label: "Dashboard",   icon: LayoutDashboard, exact: true },
+  { href: "/projecten",    label: "Projecten",   icon: FolderKanban },
+  { href: "/facturen",     label: "Facturen",    icon: FileText },
+  { href: "/inkoop",       label: "Inkoop",      icon: ShoppingCart },
+  { href: "/kosten",       label: "Kosten",      icon: Receipt },
+  { href: "/omzet",        label: "Omzet",       icon: TrendingUp },
+  { href: "/winst",        label: "Winst",       icon: Euro },
+  { href: "/grootboek",    label: "Grootboek",   icon: BookOpen },
+  { href: "/rapportages",  label: "Rapportages", icon: BarChart3 },
+  { href: "/faq",          label: "FAQ",         icon: HelpCircle },
+  { href: "/instellingen", label: "Instellingen", icon: Settings2 },
+];
+
+const NAV_CUSTOMER = [
+  { href: "/",             label: "Dashboard",   icon: LayoutDashboard, exact: true },
+  { href: "/klanten",      label: "Klanten",     icon: Building2 },
+  { href: "/werkbonnen",   label: "Werkbonnen",  icon: Wrench },
+  { href: "/omzet",        label: "Omzet",       icon: TrendingUp },
+  { href: "/jaar-index",   label: "Index",       icon: LineChart },
+  { href: "/rapportages",  label: "Rapportages", icon: BarChart3 },
+  { href: "/faq",          label: "FAQ",         icon: HelpCircle },
   { href: "/instellingen", label: "Instellingen", icon: Settings2 },
 ];
 
@@ -54,8 +68,10 @@ export function Sidebar() {
     staleTime: 60_000,
   });
 
-  const isAdmin = user?.role === "ADMIN";
-  const logoSrc = getLogo(user?.email);
+  const isAdmin  = user?.role === "ADMIN";
+  const logoSrc  = getLogo(user?.email);
+  const viewType = useViewType();
+  const NAV      = viewType === "CUSTOMER" ? NAV_CUSTOMER : NAV_PROJECT;
 
   return (
     <aside

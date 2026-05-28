@@ -11,6 +11,8 @@ import { FilterBar } from "@/components/filters/filter-bar";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { useActiveDb } from "@/hooks/use-active-db";
+import { useViewType } from "@/hooks/use-view-type";
+import type { MaintenanceKlant } from "@/lib/mock/maintenance-data";
 
 type Klant = Record<string, unknown>;
 
@@ -77,6 +79,76 @@ function KlantenInner() {
   );
 }
 
+// ── Type B: Maintenance klanten ───────────────────────────────────────────────
+
+interface KlantWithSummary extends MaintenanceKlant {
+  summary: {
+    week:  { omzet: number; totaal: number; uitgevoerd: number; openstaand: number };
+    maand: { omzet: number; totaal: number; uitgevoerd: number; openstaand: number };
+    jaar:  { omzet: number; totaal: number; uitgevoerd: number; openstaand: number };
+  };
+}
+
+function MaintenanceKlantenInner() {
+  const router = useRouter();
+  const { data, isLoading } = useQuery<KlantWithSummary[]>({
+    queryKey: ["maintenance", "klanten"],
+    queryFn:  () => fetch("/api/v1/maintenance/klanten").then(r => r.json()),
+    staleTime: 120_000,
+  });
+
+  const klanten = data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold">Klanten</h1>
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 border-b">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Klant</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Variant</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Plaats</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground border-l">Week omzet</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Week bons</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground border-l">Maand omzet</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Maand bons</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Openstaand</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">Laden…</td></tr>
+              ) : klanten.map((k, i) => (
+                <tr
+                  key={k.id}
+                  className={`border-b last:border-0 cursor-pointer hover:bg-muted/40 ${i % 2 === 1 ? "bg-muted/10" : ""}`}
+                  onClick={() => router.push(`/klanten/${k.id}`)}
+                >
+                  <td className="px-4 py-2.5 font-semibold">{k.naam}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground text-xs">{k.variant}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{k.plaats}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-medium border-l">{formatCurrency(k.summary.week.omzet)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{k.summary.week.totaal}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-medium border-l">{formatCurrency(k.summary.maand.omzet)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{k.summary.maand.totaal}</td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums ${k.summary.maand.openstaand > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}`}>
+                    {k.summary.maand.openstaand}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+
 export default function KlantenPage() {
-  return <Suspense><KlantenInner /></Suspense>;
+  const viewType = useViewType();
+  return <Suspense>{viewType === "CUSTOMER" ? <MaintenanceKlantenInner /> : <KlantenInner />}</Suspense>;
 }
