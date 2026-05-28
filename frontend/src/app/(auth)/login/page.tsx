@@ -149,7 +149,7 @@ export default function LoginPage() {
             width={180}
             height={53}
             priority
-            style={{ filter: "brightness(0) invert(1)", height: "auto" }}
+            style={{ height: "auto", objectFit: "contain" }}
           />
           <p className="text-blue-400/60 text-xs mt-1.5">Financieel Projectbeheer · Syntess Atrium BI</p>
         </div>

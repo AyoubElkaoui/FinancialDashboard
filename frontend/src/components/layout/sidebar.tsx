@@ -32,7 +32,16 @@ const ADMIN_NAV = [
 ];
 
 interface CurrentUser {
+  email: string;
   role: "ADMIN" | "VIEWER";
+}
+
+function getLogo(email?: string): string {
+  if (!email) return "/logo.png";
+  const domain = email.split("@")[1] ?? "";
+  if (domain === "elmarmaintenance.com") return "/elmar-mainentenance-logo.png";
+  if (domain === "elmarservices.com") return "/elmar-logo-alt.png";
+  return "/logo.png";
 }
 
 export function Sidebar() {
@@ -46,6 +55,7 @@ export function Sidebar() {
   });
 
   const isAdmin = user?.role === "ADMIN";
+  const logoSrc = getLogo(user?.email);
 
   return (
     <aside
@@ -69,12 +79,12 @@ export function Sidebar() {
           </div>
         ) : (
           <Image
-            src="/logo.png"
+            src={logoSrc}
             width={160}
             height={47}
-            alt="Elmar Services"
+            alt="Elmar"
             priority
-            style={{ filter: "brightness(0) invert(1)", maxWidth: "160px", height: "auto" }}
+            style={{ maxWidth: "160px", height: "auto", objectFit: "contain" }}
           />
         )}
       </div>
