@@ -23,27 +23,27 @@ const USERS: {
     databases: ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"],
   },
   {
-    email: "lilly@elmar.nl",
+    email: "lilly@elmarmaintenance.com",
     role: "VIEWER",
     databases: ["MAINTENANCE"],
   },
   {
-    email: "pamela@elmar.nl",
+    email: "pamela@elmarmaintenance.com",
     role: "VIEWER",
     databases: ["MAINTENANCE"],
   },
   {
-    email: "anissa@elmar.nl",
+    email: "anissa@elmarservices.com",
     role: "VIEWER",
     databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
   },
   {
-    email: "merve@elmar.nl",
+    email: "merve@elmarservices.com",
     role: "VIEWER",
     databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
   },
   {
-    email: "brahim@elmar.nl",
+    email: "brahim@elmarservices.com",
     role: "VIEWER",
     databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
   },

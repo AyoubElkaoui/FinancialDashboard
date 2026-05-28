@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import * as argon2 from "argon2";
 import { db } from "@/lib/db";
+import { createSession, SESSION_COOKIE, SESSION_TTL_MS } from "@/lib/session";
+import { audit } from "@/lib/audit";
 
 const schema = z.object({
   email: z.string().email(),
@@ -38,16 +40,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ongeldig e-mailadres of wachtwoord" }, { status: 401 });
   }
 
-  const response = NextResponse.json({
-    requiresTotp: user.totpEnabled,
-    requiresTotpSetup: !user.totpEnabled,
-  });
+  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? undefined;
+  const ua = req.headers.get("user-agent") ?? undefined;
 
-  response.cookies.set("elmar_partial", user.id, {
+  // If TOTP is enabled, issue a partial cookie and let the client complete via verify-totp
+  if (user.totpEnabled) {
+    const response = NextResponse.json({ requiresTotp: true });
+    response.cookies.set("elmar_partial", user.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 15 * 60,
+      path: "/",
+    });
+    return response;
+  }
+
+  // No TOTP — create a full session immediately
+  const sessionToken = await createSession(user.id, ip, ua);
+  await audit(user.id, "LOGIN", { ip });
+
+  const response = NextResponse.json({ requiresTotp: false });
+  response.cookies.set(SESSION_COOKIE, sessionToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 15 * 60,
+    maxAge: SESSION_TTL_MS / 1000,
     path: "/",
   });
   return response;
