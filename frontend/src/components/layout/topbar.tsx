@@ -73,18 +73,14 @@ export function Topbar() {
   });
 
   useEffect(() => {
-    // Restore from localStorage first, then fall back to user session
-    try {
-      const stored = localStorage.getItem("elmar_active_db");
-      if (stored && !activeDb) {
-        setActiveDb(stored);
-        return;
-      }
-    } catch {
-      // ignore localStorage errors
-    }
-    if (user?.activeDatabase && !activeDb) {
-      setActiveDb(user.activeDatabase);
+    if (activeDb) return; // already set
+    let db: string | null = null;
+    try { db = localStorage.getItem("elmar_active_db"); } catch { /* ignore */ }
+    if (!db && user?.activeDatabase) db = user.activeDatabase;
+    if (db) {
+      setActiveDb(db);
+      // Broadcast so sidebar / useActiveDb listeners pick it up on initial load
+      window.dispatchEvent(new CustomEvent(DB_CHANGE_EVENT, { detail: db }));
     }
   }, [user, activeDb]);
 
