@@ -825,6 +825,7 @@ export function getDbInkoopPerKostensoort(database: string) {
   ].map(({ KOSTENSOORT, pct }) => ({
     KOSTENSOORT,
     BEDRAG: Math.round(totalKosten * pct * 100) / 100,
+    PCT: pct * 100,
   }));
 }
 
