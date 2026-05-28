@@ -255,122 +255,111 @@ function BerekenenPanel({
 // ─── Spreadsheet / Excel view ────────────────────────────────────────────────
 
 function SpreadsheetView({ r }: { r: Rapport }) {
-  const groups: { title: string; rows: [string, string | React.ReactNode, string?][] }[] = [
-    {
-      title: "Projectinformatie",
-      rows: [
-        ["Projectnummer",  r.PROJECTNUMMER],
-        ["Naam",           r.NAAM],
-        ["Klant",          r.KLANT],
-        ["Projectleider",  r.PROJECTLEIDER],
-        ["Status",         <StatusBadge key="status" status={r.STATUS} />],
-        ["Database",       r.DATABASE],
-        ["Startdatum",     formatDate(r.STARTDATUM)],
-        ["Einddatum",      r.EINDDATUM ? formatDate(r.EINDDATUM) : "—"],
-      ],
-    },
-    {
-      title: "Opbrengsten",
-      rows: [
-        ["Aanneemsom",          formatCurrency(r.AANNEEMSOM)],
-        ["Meerwerk",            formatCurrency(r.MEERWERK)],
-        ["Totaal aanneemsom",   formatCurrency(r.TOTAAL_AANNEEMSOM), "font-bold"],
-        ["",                    ""],
-        ["Gefactureerd totaal", formatCurrency(r.GEFACTUREERD_TOTAAL)],
-        ["Betaald totaal",      formatCurrency(r.BETAALD_TOTAAL)],
-        ["Onbetaald",           formatCurrency(r.ONBETAALD_TOTAAL), r.ONBETAALD_TOTAAL > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""],
-        ["% Betaald",           formatPercentage(r.PCT_BETAALD)],
-      ],
-    },
-    {
-      title: "Kosten",
-      rows: [
-        ["Directe kosten",                              formatCurrency(r.DIRECTE_KOSTEN)],
-        [`Indirecte kosten  (${r.UREN_AANTAL} u × €${r.UREN_TARIEF})`, formatCurrency(r.INDIRECTE_KOSTEN)],
-        [`Algemene kosten (${r.ALG_KOSTEN_PCT}% van direct)`,          formatCurrency(r.ALG_KOSTEN)],
-        ["Totale kosten",  formatCurrency(r.TOTALE_KOSTEN), "font-bold"],
-      ],
-    },
-    {
-      title: "Marge",
-      rows: [
-        ["Brutomarge",   formatCurrency(r.BRUTOMARGE),  `font-bold ${r.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`],
-        ["Marge %",      formatPercentage(r.MARGE_PCT), r.MARGE_PCT >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"],
-      ],
-    },
-  ];
+  const betaaldCls = r.PCT_BETAALD >= 90
+    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+    : r.PCT_BETAALD >= 50 ? "text-orange-600 dark:text-orange-400" : "text-red-600 dark:text-red-400";
 
   return (
-    <div className="space-y-4">
-      {/* Main spreadsheet grid */}
+    <div className="space-y-3">
+      {/* ── Hoofdtabel: alle kolommen naast elkaar ── */}
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b w-64">Veld</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b">Waarde</th>
+          <table className="text-xs border-collapse" style={{ minWidth: "1400px" }}>
+            <thead>
+              {/* Groepkoppen */}
+              <tr className="bg-slate-100 dark:bg-white/[0.04]">
+                <th colSpan={6} className="px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500 border-b border-r border-slate-200 dark:border-white/10">
+                  Projectinformatie
+                </th>
+                <th colSpan={5} className="px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 border-b border-r border-slate-200 dark:border-white/10">
+                  Opbrengsten
+                </th>
+                <th colSpan={4} className="px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400 border-b border-r border-slate-200 dark:border-white/10">
+                  Kosten
+                </th>
+                <th colSpan={2} className="px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-white/10">
+                  Marge
+                </th>
+              </tr>
+              {/* Kolomkoppen */}
+              <tr className="bg-muted/50 border-b">
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Projectnr.</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Naam</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Klant</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Projectleider</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Startdatum</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Status</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Aanneemsom</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Meerwerk</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Totaal aanneemsom</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Gefactureerd</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">% Betaald</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Directe kosten</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Indirecte kosten</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Alg. kosten</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Totale kosten</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Brutomarge</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap">Marge %</th>
               </tr>
             </thead>
             <tbody>
-              {groups.map((g, gi) => (
-                <>
-                  <tr key={`hdr-${gi}`} className="bg-slate-50 dark:bg-white/[0.03] border-b border-t">
-                    <td colSpan={2} className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      {g.title}
-                    </td>
-                  </tr>
-                  {g.rows.map(([label, value, cls], ri) => (
-                    <tr
-                      key={`row-${gi}-${ri}`}
-                      className={`border-b last:border-0 ${ri % 2 === 0 ? "" : "bg-muted/20"} ${!label ? "h-1 py-0" : ""}`}
-                    >
-                      {label ? (
-                        <>
-                          <td className="px-4 py-2 text-muted-foreground font-medium whitespace-nowrap">{label}</td>
-                          <td className={`px-4 py-2 tabular-nums ${cls ?? ""}`}>{value}</td>
-                        </>
-                      ) : (
-                        <td colSpan={2} className="py-1" />
-                      )}
-                    </tr>
-                  ))}
-                </>
-              ))}
+              <tr className="hover:bg-muted/30 transition-colors">
+                <td className="px-3 py-2.5 font-mono text-muted-foreground whitespace-nowrap border-r">{r.PROJECTNUMMER}</td>
+                <td className="px-3 py-2.5 font-medium whitespace-nowrap max-w-[180px] truncate border-r">{r.NAAM}</td>
+                <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap border-r">{r.KLANT}</td>
+                <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap border-r">{r.PROJECTLEIDER}</td>
+                <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap border-r">{formatDate(r.STARTDATUM)}</td>
+                <td className="px-3 py-2.5 whitespace-nowrap border-r"><StatusBadge status={r.STATUS} /></td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r">{formatCurrency(r.AANNEEMSOM)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r text-muted-foreground">{formatCurrency(r.MEERWERK)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r font-semibold">{formatCurrency(r.TOTAAL_AANNEEMSOM)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r">{formatCurrency(r.GEFACTUREERD_TOTAAL)}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r ${betaaldCls}`}>{formatPercentage(r.PCT_BETAALD)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r">{formatCurrency(r.DIRECTE_KOSTEN)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r">{formatCurrency(r.INDIRECTE_KOSTEN)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r text-muted-foreground">{formatCurrency(r.ALG_KOSTEN)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r font-semibold">{formatCurrency(r.TOTALE_KOSTEN)}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap border-r font-bold ${r.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  {formatCurrency(r.BRUTOMARGE)}
+                </td>
+                <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap font-bold ${r.MARGE_PCT >= 15 ? "text-emerald-600 dark:text-emerald-400" : r.MARGE_PCT >= 0 ? "" : "text-red-600 dark:text-red-400"}`}>
+                  {formatPercentage(r.MARGE_PCT)}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Termijnen */}
+      {/* ── Termijnplan ── */}
       <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="px-4 py-2.5 bg-muted/40 border-b">
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Termijnplan</span>
+        <div className="px-4 py-2 bg-muted/40 border-b">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Termijnplan</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="border-b bg-muted/20">
-                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">NR</th>
-                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Omschrijving</th>
-                <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Bedrag</th>
-                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Status</th>
-                <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Verwacht</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">NR</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Omschrijving</th>
+                <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Bedrag</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Status</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">Verwacht</th>
               </tr>
             </thead>
             <tbody>
               {r.TERMIJNEN.map((t, i) => (
                 <tr key={t.NR} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
-                  <td className="px-4 py-2 text-muted-foreground">{t.NR}</td>
-                  <td className="px-4 py-2">{t.OMSCHRIJVING}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(t.BEDRAG)}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-2 text-muted-foreground border-r">{t.NR}</td>
+                  <td className="px-3 py-2 border-r">{t.OMSCHRIJVING}</td>
+                  <td className="px-3 py-2 text-right tabular-nums border-r">{formatCurrency(t.BEDRAG)}</td>
+                  <td className="px-3 py-2 border-r">
                     {t.NOG_TE_VERSTUREN
-                      ? <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">Te versturen</span>
-                      : <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Verstuurd</span>
+                      ? <span className="font-semibold text-orange-600 dark:text-orange-400">Te versturen</span>
+                      : <span className="font-semibold text-emerald-600 dark:text-emerald-400">Verstuurd</span>
                     }
                   </td>
-                  <td className="px-4 py-2 text-muted-foreground text-xs">{t.DATUM_VERWACHT ? formatDate(t.DATUM_VERWACHT) : "—"}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{t.DATUM_VERWACHT ? formatDate(t.DATUM_VERWACHT) : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -378,53 +367,52 @@ function SpreadsheetView({ r }: { r: Rapport }) {
         </div>
       </div>
 
-      {/* Facturen */}
+      {/* ── Facturen ── */}
       <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="px-4 py-2.5 bg-muted/40 border-b">
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Facturen</span>
+        <div className="px-4 py-2 bg-muted/40 border-b">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Facturen</span>
         </div>
         {r.FACTUREN.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">Geen facturen</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="border-b bg-muted/20">
-                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Factuurnummer</th>
-                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Datum</th>
-                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Bedrag excl.</th>
-                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">BTW (21%)</th>
-                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Totaal incl.</th>
-                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Betaald</th>
-                  <th className="px-4 py-2 text-right text-xs text-muted-foreground font-semibold">Openstaand</th>
-                  <th className="px-4 py-2 text-left text-xs text-muted-foreground font-semibold">Status</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Factuurnummer</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap border-r">Datum</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Bedrag excl.</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">BTW (21%)</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Totaal incl.</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Betaald</th>
+                  <th className="px-3 py-2 text-right font-semibold text-muted-foreground whitespace-nowrap border-r">Openstaand</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {r.FACTUREN.map((f, i) => {
                   const open = Math.round((f.BEDRAG_EXCL - f.BETAALD_BEDRAG) * 100) / 100;
-                  const btw = Math.round(f.BEDRAG_EXCL * 0.21 * 100) / 100;
+                  const btw  = Math.round(f.BEDRAG_EXCL * 0.21 * 100) / 100;
                   return (
                     <tr key={f.FACTUURNUMMER} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
-                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{f.FACTUURNUMMER}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{formatDate(f.DATUM)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(f.BEDRAG_EXCL)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">{formatCurrency(btw)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(f.BEDRAG_EXCL + btw)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(f.BETAALD_BEDRAG)}</td>
-                      <td className={`px-4 py-2 text-right tabular-nums ${open > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}`}>{formatCurrency(open)}</td>
-                      <td className="px-4 py-2"><StatusBadge status={f.STATUS} /></td>
+                      <td className="px-3 py-2 font-mono text-muted-foreground border-r">{f.FACTUURNUMMER}</td>
+                      <td className="px-3 py-2 text-muted-foreground border-r">{formatDate(f.DATUM)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums border-r">{formatCurrency(f.BEDRAG_EXCL)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground border-r">{formatCurrency(btw)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums border-r">{formatCurrency(f.BEDRAG_EXCL + btw)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400 border-r">{formatCurrency(f.BETAALD_BEDRAG)}</td>
+                      <td className={`px-3 py-2 text-right tabular-nums border-r ${open > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}`}>{formatCurrency(open)}</td>
+                      <td className="px-3 py-2"><StatusBadge status={f.STATUS} /></td>
                     </tr>
                   );
                 })}
-                {/* Totals row */}
                 <tr className="border-t bg-muted/30 font-semibold">
-                  <td className="px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground" colSpan={2}>Totaal</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(r.GEFACTUREERD_TOTAAL)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">{formatCurrency(Math.round(r.GEFACTUREERD_TOTAAL * 0.21 * 100) / 100)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(Math.round(r.GEFACTUREERD_TOTAAL * 1.21 * 100) / 100)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(r.BETAALD_TOTAAL)}</td>
-                  <td className={`px-4 py-2 text-right tabular-nums ${r.ONBETAALD_TOTAAL > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>{formatCurrency(r.ONBETAALD_TOTAAL)}</td>
+                  <td className="px-3 py-2 text-muted-foreground border-r" colSpan={2}>Totaal</td>
+                  <td className="px-3 py-2 text-right tabular-nums border-r">{formatCurrency(r.GEFACTUREERD_TOTAAL)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground border-r">{formatCurrency(Math.round(r.GEFACTUREERD_TOTAAL * 0.21 * 100) / 100)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums border-r">{formatCurrency(Math.round(r.GEFACTUREERD_TOTAAL * 1.21 * 100) / 100)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400 border-r">{formatCurrency(r.BETAALD_TOTAAL)}</td>
+                  <td className={`px-3 py-2 text-right tabular-nums border-r ${r.ONBETAALD_TOTAAL > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>{formatCurrency(r.ONBETAALD_TOTAAL)}</td>
                   <td />
                 </tr>
               </tbody>
