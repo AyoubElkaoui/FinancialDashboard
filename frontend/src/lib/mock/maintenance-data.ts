@@ -65,7 +65,7 @@ export interface JaarStats {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 export const MAINTENANCE_KLANTEN: MaintenanceKlant[] = [
-  { id: "k1", naam: "AS Watson",       variant: "only normal", telefoon: "020-1234567", email: "beheer@aswatson.nl",     adres: "Amstelstraat 42",               plaats: "Amsterdam" },
+  { id: "k1", naam: "AS Watson",       variant: "normal only", telefoon: "020-1234567", email: "beheer@aswatson.nl",     adres: "Amstelstraat 42",               plaats: "Amsterdam" },
   { id: "k2", naam: "Shell Nederland", variant: "premium",     telefoon: "070-2345678", email: "facility@shell.nl",      adres: "Carel van Bylandtlaan 30",      plaats: "Den Haag"   },
   { id: "k3", naam: "ABN AMRO",        variant: "normal",      telefoon: "020-3456789", email: "onderhoud@abnamro.nl",   adres: "Gustav Mahlerlaan 10",          plaats: "Amsterdam" },
   { id: "k4", naam: "PostNL",          variant: "normal",      telefoon: "070-4567890", email: "facilitair@postnl.nl",   adres: "Prinses Beatrixlaan 23",        plaats: "Den Haag"   },
