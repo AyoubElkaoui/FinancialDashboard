@@ -8,6 +8,7 @@ import { formatDate, formatCurrency, formatDaysOverdue } from "@/lib/format";
 import { DataTable } from "@/components/tables/data-table";
 import { FilterBar } from "@/components/filters/filter-bar";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQueryParams } from "@/hooks/use-query-params";
@@ -49,11 +50,11 @@ const columns: ColumnDef<Factuur>[] = [
       return v > 0 ? <Badge variant="destructive" className="text-xs">{formatDaysOverdue(v)}</Badge> : null;
     },
   },
-  { accessorKey: "STATUS", header: "Status", cell: ({ getValue }) => <Badge variant="outline" className="text-xs">{String(getValue() ?? "")}</Badge> },
+  { accessorKey: "STATUS", header: "Status", cell: ({ getValue }) => <StatusBadge status={String(getValue() ?? "")} /> },
 ];
 
 const AGING_LABELS: Record<string, string> = {
-  current: "Niet verlopen",
+  current: "Niet vervallen",
   "1-30": "1–30 dagen",
   "31-60": "31–60 dagen",
   "61-90": "61–90 dagen",
@@ -102,7 +103,7 @@ function FacturenInner() {
             </CardHeader>
             <CardContent className="pb-3 px-3">
               <div className="text-base font-bold tabular-nums">{formatCurrency(Number(bucket.BEDRAG ?? 0))}</div>
-              <div className="text-xs text-muted-foreground">{Number(bucket.AANTAL ?? 0)} facturen</div>
+              <div className="text-xs text-muted-foreground">{Number(bucket.AANTAL ?? 0)} {Number(bucket.AANTAL ?? 0) === 1 ? "factuur" : "facturen"}</div>
             </CardContent>
           </Card>
         ))}

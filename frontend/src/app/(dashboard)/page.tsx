@@ -18,8 +18,9 @@ import { CHART_COLORS, getChartColor } from "@/lib/chart-colors";
 import {
   TrendingUp, FolderKanban, ClipboardList,
   AlertCircle, Euro, ArrowRight, CheckCircle2,
-  Users, Clock, Activity,
+  Users, Clock, Activity, RefreshCw,
 } from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useActiveDb } from "@/hooks/use-active-db";
 import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import { useEffect, useState } from "react";
@@ -132,6 +133,7 @@ function ProjectDashboard() {
   const { refetchInterval } = useAutoRefresh();
   const opts = { refetchInterval };
   const show = useWidgetPrefs();
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const { data: kpis,      isLoading: kpisLoading }  = useQuery({ queryKey: ["dashboard","kpis",               activeDb], queryFn: dashboardApi.kpis,              ...opts });
   const { data: omzetData, isLoading: omzetLoading }  = useQuery({ queryKey: ["dashboard","omzet-per-maand",   activeDb], queryFn: dashboardApi.omzetPerMaand,     ...opts });
@@ -176,9 +178,8 @@ function ProjectDashboard() {
   const recUren      = recenteUren  as Record<string, unknown>[] | undefined ?? [];
   const recWerk      = recenteWerkbonnen as Record<string, unknown>[] | undefined ?? [];
 
-  const WERKBON_STATUS_COLOR: Record<string, string> = {
-    NIEUW: "#3b82f6", IN_UITVOERING: "#f59e0b", AFGEROND: "#10b981", GEFACTUREERD: "#6366f1",
-  };
+  // Track when KPI data last loaded successfully
+  useEffect(() => { if (k) setLastUpdated(new Date()); }, [k]);
 
   return (
     <div className="space-y-7 pb-8">
@@ -189,9 +190,11 @@ function ProjectDashboard() {
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{new Date().toLocaleDateString("nl-NL", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}</p>
         </div>
-        <Badge variant="outline" className="gap-2 text-xs py-1 font-medium">
-          <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
-          Live data
+        <Badge variant="outline" className="gap-1.5 text-xs py-1 font-medium text-muted-foreground">
+          <RefreshCw className="h-3 w-3" />
+          {lastUpdated
+            ? `Bijgewerkt om ${lastUpdated.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`
+            : "Laden…"}
         </Badge>
       </div>
 
@@ -493,10 +496,7 @@ function ProjectDashboard() {
                           <td className="py-2.5 pr-3 text-muted-foreground truncate max-w-[140px]">{String(w.KLANT ?? "")}</td>
                           <td className="py-2.5 pr-3 text-muted-foreground tabular-nums">{formatDate(String(w.DATUM ?? ""))}</td>
                           <td className="py-2.5">
-                            <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold"
-                              style={{ background: `${WERKBON_STATUS_COLOR[status] ?? "#94a3b8"}20`, color: WERKBON_STATUS_COLOR[status] ?? "#94a3b8" }}>
-                              {status.replace("_"," ")}
-                            </span>
+                            <StatusBadge status={status} />
                           </td>
                         </tr>
                       );

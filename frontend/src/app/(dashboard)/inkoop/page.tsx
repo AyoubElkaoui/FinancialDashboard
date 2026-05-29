@@ -62,20 +62,17 @@ function InkoopInner() {
     <div className="space-y-5">
       <PageHeader title="Inkoop" description="Inkoopfacturen en kostensoort-analyse" />
 
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="text-base">Inkoopfacturen</CardTitle></CardHeader>
-          <CardContent>
-            <FilterBar
-              search={params.search}
-              onSearchChange={(v) => setParams({ search: v, page: "1" })}
-              dateFrom={params.dateFrom}
-              dateTo={params.dateTo}
-              onDateChange={(from, to) => setParams({ dateFrom: from, dateTo: to, page: "1" })}
-              onReset={resetParams}
-            />
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-3 items-start">
+        <div className="lg:col-span-2">
+          <FilterBar
+            search={params.search}
+            onSearchChange={(v) => setParams({ search: v, page: "1" })}
+            dateFrom={params.dateFrom}
+            dateTo={params.dateTo}
+            onDateChange={(from, to) => setParams({ dateFrom: from, dateTo: to, page: "1" })}
+            onReset={resetParams}
+          />
+        </div>
 
         <Card>
           <CardHeader><CardTitle className="text-base">Verdeling dit jaar</CardTitle></CardHeader>
