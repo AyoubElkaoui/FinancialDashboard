@@ -14,6 +14,7 @@ import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { useActiveDb } from "@/hooks/use-active-db";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { getChartColor } from "@/lib/chart-colors";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Inkoop = Record<string, unknown>;
 
@@ -58,8 +59,8 @@ function InkoopInner() {
   })) ?? [];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Inkoop</h1>
+    <div className="space-y-5">
+      <PageHeader title="Inkoop" description="Inkoopfacturen en kostensoort-analyse" />
 
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
         <Card className="lg:col-span-2">

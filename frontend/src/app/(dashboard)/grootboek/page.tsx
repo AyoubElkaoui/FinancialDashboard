@@ -90,7 +90,7 @@ function GrootboekInner() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Grootboek</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Grootboek</h1>
 
       <Tabs value={activeTab} onValueChange={(v) => setParams({ tab: v, page: "1" })}>
         <TabsList>

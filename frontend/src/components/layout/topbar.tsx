@@ -1,10 +1,10 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Moon, Sun, RefreshCw, LogOut, ChevronRight, Activity, Database } from "lucide-react";
+import { Moon, Sun, RefreshCw, LogOut, ChevronDown, Activity, Database, ChevronRight, Shield } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DB_CHANGE_EVENT } from "@/hooks/use-active-db";
@@ -16,8 +16,12 @@ const ROUTE_MAP: Record<string, string> = {
   "/werkbonnen":          "Werkbonnen",
   "/klanten":             "Klanten",
   "/inkoop":              "Inkoop",
+  "/kosten":              "Kosten",
+  "/omzet":              "Omzet",
+  "/winst":              "Winst",
   "/grootboek":           "Grootboek",
   "/rapportages":         "Rapportages",
+  "/jaar-index":          "Index",
   "/faq":                 "FAQ",
   "/instellingen":        "Instellingen",
   "/admin/gebruikers":    "Gebruikers",
@@ -43,11 +47,11 @@ function timeAgo(d: Date) {
   return `${Math.floor(s / 60)}m geleden`;
 }
 
-const DB_LABELS: Record<string, string> = {
-  SERVICES:      "Services",
-  MAINTENANCE:   "Maintenance",
-  INTERNATIONAL: "International",
-  KEYSER:        "Keyser",
+const DB_META: Record<string, { label: string; color: string; dot: string }> = {
+  SERVICES:      { label: "Services",      color: "#3b82f6", dot: "bg-blue-500"    },
+  MAINTENANCE:   { label: "Maintenance",   color: "#8b5cf6", dot: "bg-violet-500"  },
+  INTERNATIONAL: { label: "International", color: "#10b981", dot: "bg-emerald-500" },
+  KEYSER:        { label: "Keyser",        color: "#f97316", dot: "bg-orange-500"  },
 };
 
 interface CurrentUser {
@@ -57,6 +61,16 @@ interface CurrentUser {
   activeDatabase: string | null;
 }
 
+function useClickOutside(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ref, onClose]);
+}
+
 export function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -64,7 +78,14 @@ export function Topbar() {
   const queryClient = useQueryClient();
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [activeDb, setActiveDb] = useState<string | null>(null);
+  const [dbOpen, setDbOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const dbRef = useRef<HTMLDivElement>(null);
+  const userRef = useRef<HTMLDivElement>(null);
   useTick();
+
+  useClickOutside(dbRef, () => setDbOpen(false));
+  useClickOutside(userRef, () => setUserOpen(false));
 
   const { data: user } = useQuery<CurrentUser>({
     queryKey: ["current-user"],
@@ -73,13 +94,12 @@ export function Topbar() {
   });
 
   useEffect(() => {
-    if (activeDb) return; // already set
+    if (activeDb) return;
     let db: string | null = null;
     try { db = localStorage.getItem("elmar_active_db"); } catch { /* ignore */ }
     if (!db && user?.activeDatabase) db = user.activeDatabase;
     if (db) {
       setActiveDb(db);
-      // Broadcast so sidebar / useActiveDb listeners pick it up on initial load
       window.dispatchEvent(new CustomEvent(DB_CHANGE_EVENT, { detail: db }));
     }
   }, [user, activeDb]);
@@ -96,17 +116,21 @@ export function Topbar() {
   const handleRefresh = () => {
     queryClient.invalidateQueries();
     setLastRefresh(new Date());
+    toast.success("Data vernieuwd");
   };
 
   const handleLogout = async () => {
+    setUserOpen(false);
     await fetch("/api/auth/logout", { method: "POST" });
     queryClient.clear();
     router.push("/login");
     router.refresh();
   };
 
-  const initials = user?.email?.[0]?.toUpperCase() ?? "?";
   const availableDbs = user?.databases ?? [];
+  const dbInfo = activeDb ? DB_META[activeDb] : null;
+  const initials = user?.email?.[0]?.toUpperCase() ?? "?";
+  const userName = user?.email?.split("@")[0] ?? "—";
 
   return (
     <header className="flex items-center h-14 px-5 border-b gap-4 shrink-0 bg-card">
@@ -114,11 +138,11 @@ export function Topbar() {
       <nav className="flex items-center gap-1.5 text-sm flex-1 min-w-0 overflow-hidden">
         {crumbs.map((c, i) => (
           <span key={c.href} className="flex items-center gap-1.5 min-w-0">
-            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />}
             {i < crumbs.length - 1 ? (
               <button
                 onClick={() => router.push(c.href)}
-                className="text-muted-foreground hover:text-foreground transition-colors truncate"
+                className="text-muted-foreground hover:text-foreground transition-colors truncate text-xs"
               >
                 {c.label}
               </button>
@@ -131,51 +155,72 @@ export function Topbar() {
 
       {/* Right controls */}
       <div className="flex items-center gap-1 shrink-0">
-        {/* Database selector */}
-        {availableDbs.length > 0 && (
-          <div className="relative group mr-1">
-            <button className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border bg-background hover:bg-muted text-sm transition-colors">
-              <Database className="h-3.5 w-3.5 text-blue-500" />
-              <span className="font-medium hidden sm:block">
-                {activeDb ? DB_LABELS[activeDb] ?? activeDb : "Kies database"}
-              </span>
-              <ChevronRight className="h-3 w-3 text-muted-foreground rotate-90" />
-            </button>
-            <div className="absolute right-0 top-full mt-1 min-w-[160px] rounded-lg border bg-popover shadow-lg p-1 opacity-0 pointer-events-none group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity z-50">
-              {availableDbs.map((db) => (
-                <button
-                  key={db}
-                  onClick={() => {
-                    setActiveDb(db);
-                    try {
-                      localStorage.setItem("elmar_active_db", db);
-                    } catch {
-                      // ignore localStorage errors
-                    }
-                    window.dispatchEvent(new CustomEvent(DB_CHANGE_EVENT, { detail: db }));
-                    queryClient.invalidateQueries();
-                    toast.success(`Database gewisseld naar ${DB_LABELS[db] ?? db}`);
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors text-left",
-                    db === activeDb
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-                      : "hover:bg-muted"
-                  )}
-                >
-                  <Database className="h-3.5 w-3.5" />
-                  {DB_LABELS[db] ?? db}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Last refresh */}
-        <span className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground mr-1">
+        {/* Last refresh indicator */}
+        <span className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground mr-2 select-none">
           <Activity className="h-3 w-3" />
           {timeAgo(lastRefresh)}
         </span>
+
+        {/* Database selector */}
+        {availableDbs.length > 0 && (
+          <div ref={dbRef} className="relative mr-1">
+            <button
+              onClick={() => setDbOpen((o) => !o)}
+              className={cn(
+                "flex items-center gap-2 h-8 px-2.5 rounded-md border text-sm transition-colors",
+                dbOpen ? "bg-muted border-border" : "bg-background hover:bg-muted border-border"
+              )}
+            >
+              {dbInfo ? (
+                <>
+                  <span className={cn("h-2 w-2 rounded-full shrink-0", dbInfo.dot)} />
+                  <span className="font-medium hidden sm:block">{dbInfo.label}</span>
+                </>
+              ) : (
+                <>
+                  <Database className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-medium hidden sm:block text-muted-foreground">Database</span>
+                </>
+              )}
+              <ChevronDown className={cn("h-3 w-3 text-muted-foreground transition-transform", dbOpen && "rotate-180")} />
+            </button>
+
+            {dbOpen && (
+              <div className="absolute right-0 top-full mt-1.5 min-w-[180px] rounded-xl border bg-popover shadow-xl p-1.5 z-50">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2.5 pb-1.5 pt-0.5">
+                  Selecteer database
+                </p>
+                {availableDbs.map((db) => {
+                  const meta = DB_META[db];
+                  const isActive = db === activeDb;
+                  return (
+                    <button
+                      key={db}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setActiveDb(db);
+                        setDbOpen(false);
+                        try { localStorage.setItem("elmar_active_db", db); } catch { /* ignore */ }
+                        window.dispatchEvent(new CustomEvent(DB_CHANGE_EVENT, { detail: db }));
+                        queryClient.invalidateQueries();
+                        toast.success(`Gewisseld naar ${meta?.label ?? db}`);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-2.5 py-2 text-sm rounded-lg transition-colors text-left",
+                        isActive ? "bg-muted font-semibold" : "hover:bg-muted/60"
+                      )}
+                    >
+                      <span className={cn("h-2 w-2 rounded-full shrink-0", meta?.dot ?? "bg-slate-400")} />
+                      <span className="flex-1">{meta?.label ?? db}</span>
+                      {isActive && <span className="text-[10px] text-muted-foreground font-normal">actief</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Refresh */}
         <button
@@ -186,9 +231,6 @@ export function Topbar() {
           <RefreshCw className="h-3.5 w-3.5" />
         </button>
 
-        {/* Separator */}
-        <div className="w-px h-5 bg-border mx-1" />
-
         {/* Theme toggle */}
         <button
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -198,30 +240,46 @@ export function Topbar() {
           {resolvedTheme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </button>
 
+        {/* Divider */}
+        <div className="w-px h-5 bg-border mx-1" />
+
         {/* User menu */}
-        <div className="relative group">
-          <button className="flex items-center gap-2 h-8 pl-1 pr-2.5 rounded-md hover:bg-muted transition-colors">
-            <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">
+        <div ref={userRef} className="relative">
+          <button
+            onClick={() => setUserOpen((o) => !o)}
+            className={cn(
+              "flex items-center gap-2 h-8 pl-1 pr-2.5 rounded-md transition-colors",
+              userOpen ? "bg-muted" : "hover:bg-muted"
+            )}
+          >
+            <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
               {initials}
             </div>
-            <span className="text-sm font-medium hidden md:block max-w-[120px] truncate">
-              {user?.email?.split("@")[0] ?? "—"}
-            </span>
+            <span className="text-sm font-medium hidden md:block max-w-[100px] truncate">{userName}</span>
+            <ChevronDown className={cn("h-3 w-3 text-muted-foreground hidden md:block transition-transform", userOpen && "rotate-180")} />
           </button>
-          <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border bg-popover shadow-lg p-1 opacity-0 pointer-events-none group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity z-50">
-            {user?.email && (
-              <div className="px-3 py-2 text-xs text-muted-foreground truncate border-b mb-1">
-                {user.email}
+
+          {userOpen && (
+            <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border bg-popover shadow-xl p-1.5 z-50">
+              <div className="px-2.5 py-2 border-b mb-1">
+                <p className="text-xs font-semibold text-foreground truncate">{userName}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
+                {user?.role === "ADMIN" && (
+                  <span className="inline-flex items-center gap-1 mt-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                    <Shield className="h-2.5 w-2.5" /> Admin
+                  </span>
+                )}
               </div>
-            )}
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-muted transition-colors"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Uitloggen
-            </button>
-          </div>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-lg text-destructive hover:bg-muted/60 transition-colors"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Uitloggen
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

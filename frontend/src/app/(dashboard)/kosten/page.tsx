@@ -27,7 +27,7 @@ function MaintenanceKostenPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Omzet per categorie</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Omzet per categorie</h1>
         <p className="text-sm text-muted-foreground mt-1">Verdeling omzet per werkbon categorie — Maintenance</p>
       </div>
 
@@ -70,7 +70,7 @@ function ProjectKostenPage({ activeDb }: { activeDb: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Kosten</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Kosten</h1>
         <p className="text-sm text-muted-foreground mt-1">Kostenopbouw per categorie — {activeDb}</p>
       </div>
 

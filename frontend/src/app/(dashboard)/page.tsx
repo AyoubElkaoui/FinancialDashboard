@@ -107,13 +107,13 @@ function UrenTooltip({ active, payload, label }: { active?: boolean; payload?: {
 
 function SectionHeader({ title, description, href, router }: { title: string; description?: string; href?: string; router?: ReturnType<typeof useRouter> }) {
   return (
-    <div className="flex items-center justify-between mb-4">
+    <div className="flex items-start justify-between gap-2">
       <div>
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+        <h2 className="text-sm font-semibold text-foreground leading-none">{title}</h2>
+        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
       </div>
       {href && router && (
-        <button onClick={() => router.push(href)} className="flex items-center gap-1 text-xs text-primary hover:underline font-medium">
+        <button onClick={() => router.push(href)} className="flex items-center gap-1 text-xs text-primary hover:underline font-medium shrink-0">
           Alle zien <ArrowRight className="h-3 w-3" />
         </button>
       )}
@@ -187,18 +187,20 @@ function ProjectDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Overzicht bedrijfsactiviteit — {new Date().toLocaleDateString("nl-NL", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{new Date().toLocaleDateString("nl-NL", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}</p>
         </div>
-        <Badge variant="outline" className="gap-2 text-xs py-1">
-          <span className="flex h-2 w-2"><span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
-          Live · Mock data
+        <Badge variant="outline" className="gap-2 text-xs py-1 font-medium">
+          <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
+          Live data
         </Badge>
       </div>
 
       {/* ── KPI rij 1: Financieel ── */}
       {show("financieel") && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Financieel</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />Financieel<span className="h-px flex-1 bg-border" />
+          </p>
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {kpisLoading ? Array.from({length:5}).map((_,i) => <Skeleton key={i} className="h-28 rounded-xl"/>) : (<>
               <StatCard label="Omzet deze maand" value={formatCurrency(n(k?.omzetDezeMonth?.OMZET))} sub={omzetTrend !== null ? `${omzetTrend >= 0 ? "▲" : "▼"} ${Math.abs(omzetTrend).toFixed(0)}% t.o.v. vorige maand` : "excl. BTW"} icon={Euro} color="blue" />
@@ -214,7 +216,9 @@ function ProjectDashboard() {
       {/* ── KPI rij 2: Uren & Personeel ── */}
       {show("uren") && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Uren & Personeel (AT_URENBREG)</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+            <span className="h-px flex-1 bg-border" />Uren & Personeel<span className="h-px flex-1 bg-border" />
+          </p>
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
             {!u ? Array.from({length:3}).map((_,i) => <Skeleton key={i} className="h-28 rounded-xl"/>) : (<>
               <StatCard label="Uren deze week"    value={`${formatNumber(n(u.UREN_DEZE_WEEK), 1)} u`}   sub="geregistreerde velduren" icon={Clock} color="blue" />

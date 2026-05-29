@@ -57,7 +57,7 @@ function KlantenInner() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Klanten</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Klanten</h1>
       <FilterBar
         search={params.search}
         onSearchChange={(v) => setParams({ search: v, page: "1" })}
@@ -101,7 +101,7 @@ function MaintenanceKlantenInner() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Klanten</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Klanten</h1>
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

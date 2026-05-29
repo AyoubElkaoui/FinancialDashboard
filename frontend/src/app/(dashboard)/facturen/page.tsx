@@ -14,6 +14,7 @@ import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { useActiveDb } from "@/hooks/use-active-db";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Factuur = Record<string, unknown>;
 
@@ -87,8 +88,8 @@ function FacturenInner() {
   });
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Facturen</h1>
+    <div className="space-y-5">
+      <PageHeader title="Facturen" description="Verkoop- en projectfacturen — openstaand, betaald en overdue" />
 
       {/* Aging overview */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

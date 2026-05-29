@@ -45,7 +45,7 @@ function MaintenanceOmzetPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Omzet</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Omzet</h1>
           <p className="text-sm text-muted-foreground mt-1">Maintenance — week & maand overzicht</p>
         </div>
         <Select value={klantId} onValueChange={(v) => setKlantId(v ?? "all")}>
@@ -193,7 +193,7 @@ function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Omzet</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Omzet</h1>
         <p className="text-sm text-muted-foreground mt-1">Gefactureerde omzet per project — {activeDb}</p>
       </div>
 

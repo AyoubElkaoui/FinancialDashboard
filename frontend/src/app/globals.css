@@ -108,8 +108,17 @@
 /* ─── Card ───────────────────────────────────────────────────────────────── */
 [data-slot="card"] {
   border: 1px solid var(--border);
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / .06);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .04), 0 1px 6px -1px rgb(0 0 0 / .06);
 }
 .dark [data-slot="card"] {
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / .3);
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / .25), 0 2px 8px -2px rgb(0 0 0 / .4);
+}
+
+/* ─── Tables ─────────────────────────────────────────────────────────────── */
+thead tr {
+  background: rgb(from var(--muted) r g b / 0.5);
+}
+tbody tr:hover {
+  background: rgb(from var(--muted) r g b / 0.35);
+  transition: background 100ms;
 }

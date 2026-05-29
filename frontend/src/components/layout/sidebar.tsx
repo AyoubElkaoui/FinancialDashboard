@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
+import { useActiveDb } from "@/hooks/use-active-db";
 
 const NAV_PROJECT = [
   { href: "/",             label: "Dashboard",   icon: LayoutDashboard, exact: true },
@@ -50,6 +51,16 @@ interface CurrentUser {
   role: "ADMIN" | "VIEWER";
 }
 
+const DB_DOT: Record<string, string> = {
+  SERVICES:      "bg-blue-500",
+  MAINTENANCE:   "bg-violet-500",
+  INTERNATIONAL: "bg-emerald-500",
+  KEYSER:        "bg-orange-500",
+};
+const DB_LABEL: Record<string, string> = {
+  SERVICES: "Services", MAINTENANCE: "Maintenance", INTERNATIONAL: "International", KEYSER: "Keyser",
+};
+
 function getLogo(email?: string): string {
   if (!email) return "/logo.png";
   const domain = email.split("@")[1] ?? "";
@@ -71,6 +82,7 @@ export function Sidebar() {
   const isAdmin  = user?.role === "ADMIN";
   const logoSrc  = getLogo(user?.email);
   const viewType = useViewTypeSafe();
+  const activeDb = useActiveDb();
   const NAV      = viewType === "CUSTOMER" ? NAV_CUSTOMER : NAV_PROJECT;
 
   return (
@@ -136,6 +148,24 @@ export function Sidebar() {
           </>
         )}
       </nav>
+
+      {/* Active database indicator */}
+      {activeDb && (
+        <div style={{ borderTop: "1px solid #1e2d45" }} className="shrink-0 px-3 py-2.5">
+          {collapsed ? (
+            <div className="flex justify-center">
+              <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", DB_DOT[activeDb] ?? "bg-slate-500")} />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className={cn("h-2 w-2 rounded-full shrink-0", DB_DOT[activeDb] ?? "bg-slate-500")} />
+              <span className="text-[11px] font-medium truncate" style={{ color: "#4a6080" }}>
+                {DB_LABEL[activeDb] ?? activeDb}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Collapse toggle */}
       <div style={{ borderTop: "1px solid #1e2d45" }} className="shrink-0 p-2">

@@ -405,7 +405,7 @@ function ProjectenInner() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">Projecten</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Projecten</h1>
           {!isSpreadsheet && (
             <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${DB_COLORS[activeDb]?.badge ?? ""}`}>
               {activeDb}
