@@ -5,50 +5,79 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatPercentage } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { LayoutGrid, Table2 } from "lucide-react";
+import { LayoutGrid, Table2, Sheet, TrendingUp, Euro, FolderKanban, AlertCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ElmarProjectSummary } from "@/lib/mock/elmar-data";
 
-// ─── DB badge ────────────────────────────────────────────────────────────────
+type View = "table" | "cards" | "spreadsheet";
 
-const DB_COLORS: Record<string, string> = {
-  SERVICES:      "bg-blue-500/15 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/30",
-  MAINTENANCE:   "bg-violet-500/15 text-violet-700 dark:text-violet-400 ring-1 ring-violet-500/30",
-  INTERNATIONAL: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30",
-  KEYSER:        "bg-orange-500/15 text-orange-700 dark:text-orange-400 ring-1 ring-orange-500/30",
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DB_COLORS: Record<string, { badge: string; header: string; accent: string }> = {
+  SERVICES:      { badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/30",     header: "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800",     accent: "#3b82f6" },
+  INTERNATIONAL: { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30", header: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800", accent: "#10b981" },
+  KEYSER:        { badge: "bg-orange-500/15 text-orange-700 dark:text-orange-400 ring-1 ring-orange-500/30",   header: "bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800",   accent: "#f97316" },
+  MAINTENANCE:   { badge: "bg-violet-500/15 text-violet-700 dark:text-violet-400 ring-1 ring-violet-500/30",   header: "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800",   accent: "#8b5cf6" },
 };
 
-function DbBadge({ db }: { db: string }) {
-  const cls = DB_COLORS[db] ?? "bg-slate-500/15 text-slate-600 ring-1 ring-slate-500/30";
-  return (
-    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${cls}`}>
-      {db}
-    </span>
-  );
-}
+const DB_NAMES: Record<string, string> = {
+  SERVICES: "Elmar Services", KEYSER: "Keyser", INTERNATIONAL: "Elmar International", MAINTENANCE: "Maintenance",
+};
 
-// ─── Marge color helper ───────────────────────────────────────────────────────
+const PROJECT_DBS = ["SERVICES", "KEYSER", "INTERNATIONAL"] as const;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function DbBadge({ db }: { db: string }) {
+  const cls = DB_COLORS[db]?.badge ?? "bg-slate-500/15 text-slate-600 ring-1 ring-slate-500/30";
+  return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${cls}`}>{db}</span>;
+}
 
 function margeCls(v: number) {
-  return v >= 15
-    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
-    : v >= 0
-    ? "text-foreground"
-    : "text-red-600 dark:text-red-400 font-semibold";
+  return v >= 15 ? "text-emerald-600 dark:text-emerald-400 font-semibold" : v >= 0 ? "" : "text-red-600 dark:text-red-400 font-semibold";
+}
+function betaaldCls(v: number) {
+  return v >= 90 ? "text-emerald-600 dark:text-emerald-400 font-semibold" : v >= 50 ? "text-orange-600 dark:text-orange-400" : "text-red-600 dark:text-red-400";
 }
 
-function betaaldCls(v: number) {
-  return v >= 90
-    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
-    : v >= 50
-    ? "text-orange-600 dark:text-orange-400"
-    : "text-red-600 dark:text-red-400";
+// ─── KPI Summary ──────────────────────────────────────────────────────────────
+
+function KpiSummary({ projecten }: { projecten: ElmarProjectSummary[] }) {
+  const totOmzet   = projecten.reduce((s, p) => s + p.GEFACTUREERD_TOTAAL, 0);
+  const totMarge   = projecten.reduce((s, p) => s + p.BRUTOMARGE, 0);
+  const totAannem  = projecten.reduce((s, p) => s + p.TOTAAL_AANNEEMSOM, 0);
+  const actief     = projecten.filter(p => p.STATUS === "ACTIEF").length;
+  const negatief   = projecten.filter(p => p.BRUTOMARGE < 0).length;
+  const gemMarge   = totAannem > 0 ? (totMarge / totAannem) * 100 : 0;
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      {[
+        { label: "Totaal gefactureerd", value: formatCurrency(totOmzet),   icon: Euro,         color: "text-blue-600 dark:text-blue-400" },
+        { label: "Totale brutomarge",   value: formatCurrency(totMarge),    icon: TrendingUp,   color: totMarge >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600" },
+        { label: "Gem. marge %",        value: formatPercentage(gemMarge),  icon: TrendingUp,   color: gemMarge >= 10 ? "text-emerald-600 dark:text-emerald-400" : "text-orange-600" },
+        { label: "Actieve projecten",   value: String(actief),              icon: FolderKanban, color: "text-blue-600 dark:text-blue-400" },
+        { label: "Verliesgevend",       value: String(negatief),            icon: AlertCircle,  color: negatief > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground" },
+      ].map(({ label, value, icon: Icon, color }) => (
+        <Card key={label}>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Icon className={`h-3.5 w-3.5 shrink-0 ${color}`} />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+            </div>
+            <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
 }
 
 // ─── Table view ───────────────────────────────────────────────────────────────
 
 function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
-    <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b ${right ? "text-right" : "text-left"}`}>
+    <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b ${right ? "text-right" : "text-left"} whitespace-nowrap`}>
       {children}
     </th>
   );
@@ -76,43 +105,35 @@ function TableView({ projecten, activeDb, onNavigate }: { projecten: ElmarProjec
           </thead>
           <tbody>
             {projecten.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
-                  Geen projecten gevonden
-                </td>
+              <tr><td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">Geen projecten gevonden</td></tr>
+            ) : projecten.map((p) => (
+              <tr key={p.ID} className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors" onClick={() => onNavigate(p)}>
+                <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{p.PROJECTNUMMER}</td>
+                <td className="px-4 py-3 font-medium max-w-[220px] truncate">{p.NAAM}</td>
+                <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate">{p.KLANT}</td>
+                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{p.PROJECTLEIDER}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(p.TOTALE_KOSTEN)}</td>
+                <td className={`px-4 py-3 text-right tabular-nums ${p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(p.BRUTOMARGE)}</td>
+                <td className={`px-4 py-3 text-right tabular-nums ${margeCls(p.MARGE_PCT)}`}>{formatPercentage(p.MARGE_PCT)}</td>
+                <td className={`px-4 py-3 text-right tabular-nums ${betaaldCls(p.PCT_BETAALD)}`}>{formatPercentage(p.PCT_BETAALD)}</td>
+                <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={p.STATUS} /></td>
               </tr>
-            ) : (
-              projecten.map((p) => (
-                <tr
-                  key={p.ID}
-                  className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors"
-                  onClick={() => onNavigate(p)}
-                >
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                    {p.PROJECTNUMMER}
-                  </td>
-                  <td className="px-4 py-3 font-medium max-w-[200px] truncate">{p.NAAM}</td>
-                  <td className="px-4 py-3 text-muted-foreground max-w-[140px] truncate">{p.KLANT}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{p.PROJECTLEIDER}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(p.TOTALE_KOSTEN)}</td>
-                  <td className={`px-4 py-3 text-right tabular-nums ${p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                    {formatCurrency(p.BRUTOMARGE)}
-                  </td>
-                  <td className={`px-4 py-3 text-right tabular-nums ${margeCls(p.MARGE_PCT)}`}>
-                    {formatPercentage(p.MARGE_PCT)}
-                  </td>
-                  <td className={`px-4 py-3 text-right tabular-nums ${betaaldCls(p.PCT_BETAALD)}`}>
-                    {formatPercentage(p.PCT_BETAALD)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <StatusBadge status={p.STATUS} />
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
+          {projecten.length > 1 && (
+            <tfoot className="border-t bg-muted/30 font-semibold text-sm">
+              <tr>
+                <td colSpan={4} className="px-4 py-2.5 text-xs uppercase tracking-wider text-muted-foreground">Totaal ({projecten.length} projecten)</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTAAL_AANNEEMSOM,0))}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.GEFACTUREERD_TOTAAL,0))}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTALE_KOSTEN,0))}</td>
+                <td className={`px-4 py-2.5 text-right tabular-nums ${projecten.reduce((s,p)=>s+p.BRUTOMARGE,0)>=0?"text-emerald-600 dark:text-emerald-400":"text-red-600"}`}>{formatCurrency(projecten.reduce((s,p)=>s+p.BRUTOMARGE,0))}</td>
+                <td colSpan={3} />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
@@ -131,22 +152,12 @@ function MiniStat({ label, value, cls }: { label: string; value: string; cls?: s
 }
 
 function CardView({ projecten, onNavigate }: { projecten: ElmarProjectSummary[]; onNavigate: (p: ElmarProjectSummary) => void }) {
-  if (projecten.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-40 text-muted-foreground">
-        Geen projecten gevonden
-      </div>
-    );
-  }
+  if (projecten.length === 0) return <div className="flex items-center justify-center h-40 text-muted-foreground">Geen projecten gevonden</div>;
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {projecten.map((p) => (
-        <div
-          key={p.ID}
-          onClick={() => onNavigate(p)}
-          className="cursor-pointer rounded-xl border bg-card p-4 hover:shadow-md hover:border-blue-500/30 transition-all duration-150 flex flex-col gap-3"
-        >
-          {/* Top row */}
+        <div key={p.ID} onClick={() => onNavigate(p)}
+          className="cursor-pointer rounded-xl border bg-card p-4 hover:shadow-md hover:border-blue-500/30 transition-all duration-150 flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex flex-col gap-1 min-w-0">
               <span className="font-mono text-[11px] text-muted-foreground leading-none">{p.PROJECTNUMMER}</span>
@@ -158,30 +169,16 @@ function CardView({ projecten, onNavigate }: { projecten: ElmarProjectSummary[];
               <span className="text-[10px] text-muted-foreground">{p.PROJECTLEIDER}</span>
             </div>
           </div>
-
-          {/* Divider */}
           <div className="border-t" />
-
-          {/* Metrics grid */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-            <MiniStat label="Aanneemsom" value={formatCurrency(p.TOTAAL_AANNEEMSOM)} />
+            <MiniStat label="Aanneemsom"   value={formatCurrency(p.TOTAAL_AANNEEMSOM)} />
             <MiniStat label="Gefactureerd" value={formatCurrency(p.GEFACTUREERD_TOTAAL)} />
-            <MiniStat
-              label="Brutomarge"
-              value={formatCurrency(p.BRUTOMARGE)}
-              cls={p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
-            />
-            <MiniStat
-              label="Marge %"
-              value={formatPercentage(p.MARGE_PCT)}
-              cls={p.MARGE_PCT >= 15 ? "text-emerald-600 dark:text-emerald-400" : p.MARGE_PCT >= 0 ? "" : "text-red-600 dark:text-red-400"}
-            />
+            <MiniStat label="Brutomarge"   value={formatCurrency(p.BRUTOMARGE)}
+              cls={p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
+            <MiniStat label="Marge %"      value={formatPercentage(p.MARGE_PCT)}
+              cls={p.MARGE_PCT >= 15 ? "text-emerald-600 dark:text-emerald-400" : p.MARGE_PCT >= 0 ? "" : "text-red-600 dark:text-red-400"} />
             <MiniStat label="Totale kosten" value={formatCurrency(p.TOTALE_KOSTEN)} cls="text-muted-foreground" />
-            <MiniStat
-              label="% Betaald"
-              value={formatPercentage(p.PCT_BETAALD)}
-              cls={betaaldCls(p.PCT_BETAALD)}
-            />
+            <MiniStat label="% Betaald"    value={formatPercentage(p.PCT_BETAALD)} cls={betaaldCls(p.PCT_BETAALD)} />
           </div>
         </div>
       ))}
@@ -189,140 +186,280 @@ function CardView({ projecten, onNavigate }: { projecten: ElmarProjectSummary[];
   );
 }
 
-// ─── Inner component ─────────────────────────────────────────────────────────
+// ─── Spreadsheet view ─────────────────────────────────────────────────────────
+
+interface SsCol { key: string; label: string; right: boolean; mono?: boolean; wide?: boolean; currency?: boolean; pct?: boolean; colored?: boolean; }
+type SsKey = "PROJECTNUMMER" | "NAAM" | "KLANT" | "PROJECTLEIDER" | "STARTDATUM" | "EINDDATUM" | "STATUS" | "AANNEEMSOM" | "MEERWERK" | "TOTAAL_AANNEEMSOM" | "GEFACTUREERD_TOTAAL" | "PCT_BETAALD" | "TOTALE_KOSTEN" | "BRUTOMARGE" | "MARGE_PCT";
+
+const SS_COLS: SsCol[] = [
+  { key: "PROJECTNUMMER",    label: "Projectnr.",      right: false, mono: true  },
+  { key: "NAAM",             label: "Naam",            right: false, wide: true  },
+  { key: "KLANT",            label: "Klant",           right: false, wide: true  },
+  { key: "PROJECTLEIDER",    label: "Projectleider",   right: false             },
+  { key: "STARTDATUM",       label: "Start",           right: false             },
+  { key: "EINDDATUM",        label: "Eind",            right: false             },
+  { key: "STATUS",           label: "Status",          right: false             },
+  { key: "AANNEEMSOM",       label: "Aanneemsom",      right: true,  currency: true },
+  { key: "MEERWERK",         label: "Meerwerk",        right: true,  currency: true },
+  { key: "TOTAAL_AANNEEMSOM",label: "Totaal aannem.",  right: true,  currency: true },
+  { key: "GEFACTUREERD_TOTAAL",label:"Gefactureerd",   right: true,  currency: true },
+  { key: "PCT_BETAALD",      label: "% Betaald",       right: true,  pct: true   },
+  { key: "TOTALE_KOSTEN",    label: "Totale kosten",   right: true,  currency: true },
+  { key: "BRUTOMARGE",       label: "Brutomarge",      right: true,  currency: true, colored: true },
+  { key: "MARGE_PCT",        label: "Marge %",         right: true,  pct: true,  colored: true },
+];
+
+function cellValue(p: ElmarProjectSummary, col: SsCol): React.ReactNode {
+  const raw = p[col.key as keyof ElmarProjectSummary];
+  if (col.key === "STATUS") return <StatusBadge status={String(raw)} />;
+  if (col.currency) {
+    const n = Number(raw);
+    const cls = col.colored ? (n >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400") : "";
+    return <span className={cls}>{formatCurrency(n)}</span>;
+  }
+  if (col.pct) {
+    const n = Number(raw);
+    const cls = col.colored ? margeCls(n) : betaaldCls(n);
+    return <span className={cls}>{formatPercentage(n)}</span>;
+  }
+  if (col.key === "STARTDATUM" || col.key === "EINDDATUM") return raw ? String(raw).slice(0, 7) : "—";
+  return String(raw ?? "—");
+}
+
+function SubtotalRow({ label, projecten, accent }: { label: string; projecten: ElmarProjectSummary[]; accent: string }) {
+  const tot = (key: SsKey) => projecten.reduce((s, p) => s + Number(p[key as keyof ElmarProjectSummary] ?? 0), 0);
+  const marge = tot("BRUTOMARGE");
+  return (
+    <tr style={{ borderTop: `2px solid ${accent}30`, background: `${accent}08` }}>
+      <td colSpan={7} className="px-3 py-2 text-xs font-bold uppercase tracking-wider" style={{ color: accent }}>
+        ∑ {label} ({projecten.length} projecten)
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">{formatCurrency(tot("AANNEEMSOM"))}</td>
+      <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">{formatCurrency(tot("MEERWERK"))}</td>
+      <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">{formatCurrency(tot("TOTAAL_AANNEEMSOM"))}</td>
+      <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">{formatCurrency(tot("GEFACTUREERD_TOTAAL"))}</td>
+      <td className="px-3 py-2" />
+      <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">{formatCurrency(tot("TOTALE_KOSTEN"))}</td>
+      <td className={`px-3 py-2 text-right tabular-nums text-xs font-bold ${marge >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600"}`}>{formatCurrency(marge)}</td>
+      <td className="px-3 py-2" />
+    </tr>
+  );
+}
+
+function SpreadsheetView({ projecten, onNavigate }: { projecten: ElmarProjectSummary[]; onNavigate: (p: ElmarProjectSummary) => void }) {
+  const grouped = PROJECT_DBS.map(db => ({
+    db,
+    rows: projecten.filter(p => p.DATABASE === db),
+  })).filter(g => g.rows.length > 0);
+
+  const totMarge = projecten.reduce((s, p) => s + p.BRUTOMARGE, 0);
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="overflow-x-auto" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+        <table className="text-xs w-full border-collapse" style={{ minWidth: 1400 }}>
+          {/* Sticky header */}
+          <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+            <tr className="bg-muted/90 backdrop-blur border-b-2">
+              {SS_COLS.map(col => (
+                <th key={col.key}
+                  className={`px-3 py-3 font-semibold uppercase tracking-wider text-muted-foreground border-r border-border/50 whitespace-nowrap ${col.right ? "text-right" : "text-left"} ${"wide" in col ? "min-w-[180px]" : ""}`}>
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {grouped.map(({ db, rows }) => {
+              const cfg = DB_COLORS[db] ?? DB_COLORS.SERVICES;
+              return (
+                <>
+                  {/* Database group header */}
+                  <tr key={`hdr-${db}`} className={`border-b ${cfg.header}`}>
+                    <td colSpan={SS_COLS.length} className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: cfg.accent }} />
+                        <span className="font-bold text-sm" style={{ color: cfg.accent }}>{DB_NAMES[db]}</span>
+                        <span className="text-muted-foreground font-normal">— {rows.length} {rows.length === 1 ? "project" : "projecten"}</span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Project rows */}
+                  {rows.map((p, i) => (
+                    <tr key={p.ID}
+                      className={`border-b hover:bg-muted/50 cursor-pointer transition-colors ${i % 2 === 1 ? "bg-muted/10" : ""}`}
+                      onClick={() => onNavigate(p)}>
+                      {SS_COLS.map(col => (
+                        <td key={col.key}
+                          className={`px-3 py-2 border-r border-border/30 ${col.right ? "text-right tabular-nums" : ""} ${"mono" in col ? "font-mono text-muted-foreground" : ""} ${"wide" in col ? "max-w-[200px] truncate" : "whitespace-nowrap"}`}>
+                          {cellValue(p, col)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+
+                  {/* Subtotal per database */}
+                  <SubtotalRow key={`sub-${db}`} label={DB_NAMES[db]} projecten={rows} accent={cfg.accent} />
+                </>
+              );
+            })}
+          </tbody>
+
+          {/* Grand total */}
+          <tfoot style={{ position: "sticky", bottom: 0 }}>
+            <tr className="border-t-2 bg-muted/80 backdrop-blur font-bold">
+              <td colSpan={7} className="px-3 py-3 text-xs uppercase tracking-wider">
+                TOTAAL — alle bedrijven ({projecten.length} projecten)
+              </td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.AANNEEMSOM,0))}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.MEERWERK,0))}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTAAL_AANNEEMSOM,0))}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.GEFACTUREERD_TOTAAL,0))}</td>
+              <td className="px-3 py-3" />
+              <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTALE_KOSTEN,0))}</td>
+              <td className={`px-3 py-3 text-right tabular-nums text-base ${totMarge >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600"}`}>{formatCurrency(totMarge)}</td>
+              <td className="px-3 py-3" />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Skeleton ──────────────────────────────────────────────────────────────────
+
+function TableSkeleton({ cols }: { cols: number }) {
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40">
+            <tr>{Array.from({ length: cols }).map((_, j) => <th key={j} className="px-4 py-3"><div className="h-3 bg-muted rounded animate-pulse" /></th>)}</tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <tr key={i} className="border-b">
+                {Array.from({ length: cols }).map((__, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-muted rounded animate-pulse" /></td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Inner component ──────────────────────────────────────────────────────────
 
 function ProjectenInner() {
-  const router = useRouter();
-  const [activeDb, setActiveDb] = useState<string>("SERVICES");
-  const [search, setSearch] = useState("");
-  const [mounted, setMounted] = useState(false);
-  const [view, setView] = useState<"table" | "cards">("table");
+  const router  = useRouter();
+  const [activeDb, setActiveDb] = useState("SERVICES");
+  const [search,   setSearch]   = useState("");
+  const [mounted,  setMounted]  = useState(false);
+  const [view,     setView]     = useState<View>("table");
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem("elmar_active_db");
       if (stored) setActiveDb(stored);
-      const storedView = localStorage.getItem("elmar_projecten_view") as "table" | "cards" | null;
-      if (storedView) setView(storedView);
+      const sv = localStorage.getItem("elmar_projecten_view") as View | null;
+      if (sv) setView(sv);
     } catch {}
     setMounted(true);
+
+    const onEvent = (e: Event) => {
+      const db = (e as CustomEvent<string>).detail;
+      if (db) setActiveDb(db);
+    };
+    window.addEventListener("elmar-db-change", onEvent);
+    return () => window.removeEventListener("elmar-db-change", onEvent);
   }, []);
 
-  useEffect(() => {
-    function onStorage(e: StorageEvent) {
-      if (e.key === "elmar_active_db" && e.newValue) setActiveDb(e.newValue);
-    }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  const isSpreadsheet = view === "spreadsheet";
+  const queryDb = isSpreadsheet ? "ALL" : activeDb;
 
   const { data, isLoading } = useQuery<{ data: ElmarProjectSummary[]; total: number }>({
-    queryKey: ["elmar-projecten", activeDb, search],
+    queryKey: ["elmar-projecten", queryDb, search],
     queryFn: () => {
-      const params = new URLSearchParams({ database: activeDb });
+      const params = new URLSearchParams({ database: queryDb });
       if (search) params.set("search", search);
-      return fetch(`/api/v1/projecten?${params.toString()}`).then((r) => r.json());
+      return fetch(`/api/v1/projecten?${params}`).then(r => r.json());
     },
     enabled: mounted,
   });
 
   const projecten = data?.data ?? [];
 
-  const switchView = (v: "table" | "cards") => {
+  const switchView = (v: View) => {
     setView(v);
     try { localStorage.setItem("elmar_projecten_view", v); } catch {}
   };
 
-  const navigate = (p: ElmarProjectSummary) =>
-    router.push(`/projecten/${p.ID}?database=${activeDb}`);
+  const navigate = (p: ElmarProjectSummary) => router.push(`/projecten/${p.ID}?database=${p.DATABASE}`);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold">Projecten</h1>
-          <DbBadge db={activeDb} />
+          {!isSpreadsheet && (
+            <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${DB_COLORS[activeDb]?.badge ?? ""}`}>
+              {activeDb}
+            </span>
+          )}
+          {isSpreadsheet && (
+            <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-slate-500/10 text-slate-600 dark:text-slate-400 ring-1 ring-slate-500/20">
+              Alle bedrijven
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             type="search"
             placeholder="Zoek op naam, nummer of klant…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={e => setSearch(e.target.value)}
             className="h-9 w-64 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
-          {/* View toggle */}
-          <div className="flex items-center rounded-md border overflow-hidden">
-            <button
-              onClick={() => switchView("table")}
-              title="Tabelweergave"
-              className={`flex items-center gap-1.5 h-9 px-3 text-sm transition-colors ${
-                view === "table"
-                  ? "bg-blue-600 text-white"
-                  : "bg-background text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              <Table2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Tabel</span>
-            </button>
-            <button
-              onClick={() => switchView("cards")}
-              title="Kaartweergave"
-              className={`flex items-center gap-1.5 h-9 px-3 text-sm transition-colors border-l ${
-                view === "cards"
-                  ? "bg-blue-600 text-white"
-                  : "bg-background text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Kaarten</span>
-            </button>
+          <div className="flex items-center rounded-md border overflow-hidden text-sm">
+            {([
+              { v: "table",       icon: Table2,      label: "Tabel"       },
+              { v: "cards",       icon: LayoutGrid,  label: "Kaarten"     },
+              { v: "spreadsheet", icon: Sheet,       label: "Spreadsheet" },
+            ] as const).map(({ v, icon: Icon, label }) => (
+              <button key={v} onClick={() => switchView(v)} title={label}
+                className={`flex items-center gap-1.5 h-9 px-3 transition-colors border-l first:border-l-0 ${view === v ? "bg-blue-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}>
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
+      {/* KPI summary — always visible */}
+      {!isLoading && projecten.length > 0 && <KpiSummary projecten={projecten} />}
+
       {/* Content */}
       {isLoading ? (
-        view === "cards" ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-48 rounded-xl border bg-card animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40">
-                  <tr>
-                    {Array.from({ length: 11 }).map((_, j) => (
-                      <th key={j} className="px-4 py-3"><div className="h-3 bg-muted rounded animate-pulse" /></th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="border-b">
-                      {Array.from({ length: 11 }).map((__, j) => (
-                        <td key={j} className="px-4 py-3"><div className="h-4 bg-muted rounded animate-pulse" /></td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
+        <TableSkeleton cols={isSpreadsheet ? 15 : 11} />
       ) : view === "table" ? (
         <TableView projecten={projecten} activeDb={activeDb} onNavigate={navigate} />
-      ) : (
+      ) : view === "cards" ? (
         <CardView projecten={projecten} onNavigate={navigate} />
+      ) : (
+        <SpreadsheetView projecten={projecten} onNavigate={navigate} />
       )}
 
       {data && (
         <p className="text-xs text-muted-foreground">
-          {data.total} {data.total === 1 ? "project" : "projecten"} in database <strong>{activeDb}</strong>
+          {data.total} {data.total === 1 ? "project" : "projecten"}
+          {isSpreadsheet ? " — alle bedrijven gecombineerd" : ` in database ${activeDb}`}
         </p>
       )}
     </div>
