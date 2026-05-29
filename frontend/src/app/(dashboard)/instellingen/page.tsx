@@ -152,7 +152,7 @@ export default function InstellingenPage() {
   const dbInfo = DB_META[activeDb];
 
   return (
-    <div className="space-y-6 pb-10 max-w-3xl">
+    <div className="space-y-6 pb-10">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Settings2 className="h-6 w-6 text-muted-foreground" />
@@ -161,40 +161,44 @@ export default function InstellingenPage() {
         <p className="text-sm text-muted-foreground mt-1">Pas uw dashboard aan en beheer uw voorkeuren.</p>
       </div>
 
-      {/* Actieve database */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Actieve database</CardTitle>
-          <CardDescription>Geselecteerd via de selector rechtsboven. Wordt opgeslagen in uw browser.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className={`flex items-center gap-3 p-3 rounded-lg border ${
-            isMaintenance ? "bg-violet-500/10 border-violet-500/20" : "bg-blue-500/10 border-blue-500/20"
-          }`}>
-            <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${dbInfo?.dot ?? "bg-slate-400"}`} />
-            <span className={`font-semibold ${dbInfo?.color ?? ""}`}>{dbInfo?.label ?? activeDb}</span>
-            <span className="text-sm text-muted-foreground ml-auto">Wissel via de selector rechtsboven</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {Object.entries(DB_META).map(([k, meta]) => (
-              <div
-                key={k}
-                className={`rounded-lg p-2.5 text-xs font-medium text-center transition-colors flex items-center justify-center gap-1.5 ${
-                  k === activeDb ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
-                }`}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${meta.dot}`} />
-                {meta.label.replace("Elmar ", "")}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Widget toggles — neemt 2/3 breedte */}
+        <div className="lg:col-span-2">
+          <WidgetList widgets={widgets} prefs={prefs} onToggle={toggle} onToggleAll={toggleAll} />
+        </div>
+
+        {/* Rechter kolom: database + help */}
+        <div className="space-y-6">
+          {/* Actieve database */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Actieve database</CardTitle>
+              <CardDescription>Geselecteerd via de selector rechtsboven.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className={`flex items-center gap-3 p-3 rounded-lg border ${
+                isMaintenance ? "bg-violet-500/10 border-violet-500/20" : "bg-blue-500/10 border-blue-500/20"
+              }`}>
+                <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${dbInfo?.dot ?? "bg-slate-400"}`} />
+                <span className={`font-semibold text-sm ${dbInfo?.color ?? ""}`}>{dbInfo?.label ?? activeDb}</span>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(DB_META).map(([k, meta]) => (
+                  <div
+                    key={k}
+                    className={`rounded-lg p-2.5 text-xs font-medium text-center transition-colors flex items-center justify-center gap-1.5 ${
+                      k === activeDb ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${meta.dot}`} />
+                    {meta.label.replace("Elmar ", "")}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Widget toggles */}
-      <WidgetList widgets={widgets} prefs={prefs} onToggle={toggle} onToggleAll={toggleAll} />
-
-      {/* Help sectie — view-aware */}
+          {/* Help sectie — view-aware */}
       {isMaintenance ? (
         <Card>
           <CardHeader>
@@ -252,7 +256,9 @@ export default function InstellingenPage() {
             </div>
           </CardContent>
         </Card>
-      )}
+        )}
+        </div>{/* einde rechter kolom */}
+      </div>{/* einde grid */}
     </div>
   );
 }

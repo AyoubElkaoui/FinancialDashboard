@@ -163,8 +163,12 @@ function FaqItemRow({ item }: { item: FaqItem }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FaqPage() {
+  const half = Math.ceil(FAQ_SECTIONS.length / 2);
+  const left  = FAQ_SECTIONS.slice(0, half);
+  const right = FAQ_SECTIONS.slice(half);
+
   return (
-    <div className="space-y-6 pb-10 max-w-3xl">
+    <div className="space-y-6 pb-10">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Veelgestelde vragen</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -172,18 +176,36 @@ export default function FaqPage() {
         </p>
       </div>
 
-      {FAQ_SECTIONS.map((section) => (
-        <Card key={section.title}>
-          <CardHeader className="border-b">
-            <CardTitle className="text-base">{section.title}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {section.items.map((item) => (
-              <FaqItemRow key={item.question} item={item} />
-            ))}
-          </CardContent>
-        </Card>
-      ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="space-y-4">
+          {left.map((section) => (
+            <Card key={section.title}>
+              <CardHeader className="border-b pb-3">
+                <CardTitle className="text-sm font-semibold">{section.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {section.items.map((item) => (
+                  <FaqItemRow key={item.question} item={item} />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="space-y-4">
+          {right.map((section) => (
+            <Card key={section.title}>
+              <CardHeader className="border-b pb-3">
+                <CardTitle className="text-sm font-semibold">{section.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {section.items.map((item) => (
+                  <FaqItemRow key={item.question} item={item} />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

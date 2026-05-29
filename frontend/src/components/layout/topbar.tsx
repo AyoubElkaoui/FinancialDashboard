@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Moon, Sun, RefreshCw, LogOut, ChevronDown, Activity, Database, ChevronRight, Shield } from "lucide-react";
+import { Moon, Sun, RefreshCw, LogOut, ChevronDown, Activity, Database, ChevronRight, Shield, User } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
@@ -270,6 +270,15 @@ export function Topbar() {
                   </span>
                 )}
               </div>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setUserOpen(false); router.push("/profiel"); }}
+                className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-lg hover:bg-muted/60 transition-colors"
+              >
+                <User className="h-3.5 w-3.5" />
+                Mijn profiel
+              </button>
+              <div className="my-1 h-px bg-border" />
               <button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={handleLogout}
