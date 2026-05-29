@@ -129,7 +129,7 @@ export function MaintenanceDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                     <YAxis tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={42} />
-                    <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+                    <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} cursor={{ fill: 'transparent' }} />
                     <Bar dataKey="omzet" name="Omzet" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -149,7 +149,7 @@ export function MaintenanceDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
+                    <Tooltip cursor={{ fill: 'transparent' }} />
                     <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="uitgevoerd" name="Uitgevoerd" stackId="a" fill="#10b981" />
                     <Bar dataKey="openstaand" name="Openstaand" stackId="a" fill="#f59e0b" />

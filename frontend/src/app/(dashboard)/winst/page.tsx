@@ -57,7 +57,7 @@ export default function WinstPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="naam" tick={{ fontSize: 10 }} />
                 <YAxis tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} labelFormatter={l => `Project ${l}`} />
+                <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} labelFormatter={l => `Project ${l}`} cursor={{ fill: 'transparent' }} />
                 <ReferenceLine y={0} stroke="#94a3b8" />
                 <Bar dataKey="marge" name="Brutomarge" radius={[4, 4, 0, 0]}
                   fill="#10b981"

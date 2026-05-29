@@ -112,7 +112,7 @@ function KostenCharts({ rows }: { rows: KostensoortRow[] }) {
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie data={rows} dataKey="BEDRAG" nameKey="KOSTENSOORT" cx="50%" cy="50%" outerRadius={100}
+              <Pie data={rows} dataKey="BEDRAG" nameKey="KOSTENSOORT" cx="50%" cy="50%" innerRadius={55} outerRadius={100}
                 label={(p) => `${p.name} ${((p.percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
                 {rows.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               </Pie>
@@ -130,7 +130,7 @@ function KostenCharts({ rows }: { rows: KostensoortRow[] }) {
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="KOSTENSOORT" tick={{ fontSize: 11 }} width={115} />
-              <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+              <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} cursor={{ fill: 'transparent' }} />
               <Bar dataKey="BEDRAG" radius={[0, 4, 4, 0]}>
                 {rows.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               </Bar>

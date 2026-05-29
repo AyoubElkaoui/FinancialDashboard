@@ -82,7 +82,7 @@ function InkoopInner() {
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={false}>
+                <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={70} label={false}>
                   {chartData.map((_, i) => <Cell key={i} fill={getChartColor(i)} />)}
                 </Pie>
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />

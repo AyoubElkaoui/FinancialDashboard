@@ -103,6 +103,7 @@ export function FilterBar({
 
           <Input
             type="date"
+            lang="nl"
             value={dateFrom ?? ""}
             onChange={(e) => onDateChange(e.target.value, dateTo ?? "")}
             className="h-8 w-36 text-sm"
@@ -110,6 +111,7 @@ export function FilterBar({
           <span className="text-muted-foreground text-sm">t/m</span>
           <Input
             type="date"
+            lang="nl"
             value={dateTo ?? ""}
             onChange={(e) => onDateChange(dateFrom ?? "", e.target.value)}
             className="h-8 w-36 text-sm"

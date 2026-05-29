@@ -63,11 +63,11 @@ function RapportCard({ id, title }: { id: string; title: string }) {
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <Label className="text-xs">Datum van</Label>
-            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-7 text-xs" />
+            <Input type="date" lang="nl" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-7 text-xs" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Datum tot</Label>
-            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-7 text-xs" />
+            <Input type="date" lang="nl" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-7 text-xs" />
           </div>
         </div>
         <Button size="sm" className="w-full gap-2" onClick={handleDownload} disabled={loading}>

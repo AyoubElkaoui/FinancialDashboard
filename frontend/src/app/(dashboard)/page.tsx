@@ -298,7 +298,7 @@ function ProjectDashboard() {
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
                       <XAxis dataKey="name" tick={{fontSize:10}}/>
                       <YAxis tick={{fontSize:10}} width={30}/>
-                      <Tooltip content={<UrenTooltip/>}/>
+                      <Tooltip content={<UrenTooltip/>} cursor={{ fill: 'transparent' }}/>
                       <Bar dataKey="uren" name="Uren" fill="#3b82f6" radius={[3,3,0,0]} maxBarSize={28}/>
                     </BarChart>
                   </ResponsiveContainer>
@@ -318,7 +318,7 @@ function ProjectDashboard() {
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)"/>
                       <XAxis type="number" tick={{fontSize:10}}/>
                       <YAxis type="category" dataKey="name" width={90} tick={{fontSize:10}}/>
-                      <Tooltip content={<UrenTooltip/>}/>
+                      <Tooltip content={<UrenTooltip/>} cursor={{ fill: 'transparent' }}/>
                       <Bar dataKey="uren" name="Uren" radius={[0,3,3,0]} maxBarSize={18}>
                         {medewData.map((_,i) => <Cell key={i} fill={getChartColor(i)} fillOpacity={0.85}/>)}
                       </Bar>
@@ -346,7 +346,7 @@ function ProjectDashboard() {
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)"/>
                       <XAxis type="number" tickFormatter={v => `€${(v/1000).toFixed(0)}k`} tick={{fontSize:10}}/>
                       <YAxis type="category" dataKey="name" width={150} tick={{fontSize:10}}/>
-                      <Tooltip content={<EuroTooltip/>}/>
+                      <Tooltip content={<EuroTooltip/>} cursor={{ fill: 'transparent' }}/>
                       <Bar dataKey="omzet" name="Omzet" radius={[0,4,4,0]} maxBarSize={18}>
                         {klantChart.map((_,i) => <Cell key={i} fill={getChartColor(i)} fillOpacity={0.85}/>)}
                       </Bar>

@@ -87,7 +87,7 @@ function MaintenanceOmzetPage() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+                    <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} cursor={{ fill: 'transparent' }} />
                     <Bar dataKey="omzet" name="Omzet" fill="#2563eb" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -104,7 +104,7 @@ function MaintenanceOmzetPage() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip />
+                    <Tooltip cursor={{ fill: 'transparent' }} />
                     <Legend />
                     <Bar dataKey="uitgevoerd" name="Uitgevoerd" stackId="a" fill="#10b981" />
                     <Bar dataKey="openstaand" name="Openstaand" stackId="a" fill="#f59e0b" />
@@ -221,7 +221,7 @@ function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="naam" tick={{ fontSize: 10 }} />
                 <YAxis tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+                <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} cursor={{ fill: 'transparent' }} />
                 <Legend />
                 <Bar dataKey="aanneemsom"   name="Aanneemsom"   fill="#e2e8f0" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="gefactureerd" name="Gefactureerd" fill="#2563eb" radius={[4, 4, 0, 0]} />
