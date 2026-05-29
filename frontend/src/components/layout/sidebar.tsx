@@ -95,7 +95,7 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div
-        style={{ borderBottom: "1px solid #1e2d45" }}
+        style={{ borderBottom: "1px solid #1e2d45", background: "#ffffff" }}
         className={cn("flex items-center h-14 shrink-0", collapsed ? "justify-center" : "px-4")}
       >
         {collapsed ? (
