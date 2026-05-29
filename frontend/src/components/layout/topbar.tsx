@@ -24,6 +24,7 @@ const ROUTE_MAP: Record<string, string> = {
   "/jaar-index":          "Index",
   "/faq":                 "FAQ",
   "/instellingen":        "Instellingen",
+  "/profiel":             "Profiel",
   "/admin/gebruikers":    "Gebruikers",
   "/admin/audit":         "Auditlog",
 };
@@ -94,9 +95,21 @@ export function Topbar() {
   });
 
   useEffect(() => {
+    const allowedDbs = user?.databases;
+    if (!allowedDbs?.length) return;
+    // Validate current selection against allowed databases
+    if (activeDb && !allowedDbs.includes(activeDb)) {
+      const fallback = allowedDbs[0];
+      setActiveDb(fallback);
+      try { localStorage.setItem("elmar_active_db", fallback); } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent(DB_CHANGE_EVENT, { detail: fallback }));
+      return;
+    }
     if (activeDb) return;
     let db: string | null = null;
     try { db = localStorage.getItem("elmar_active_db"); } catch { /* ignore */ }
+    // Only restore from localStorage if user still has access
+    if (db && !allowedDbs.includes(db)) db = null;
     if (!db && user?.activeDatabase) db = user.activeDatabase;
     if (db) {
       setActiveDb(db);

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  User, Shield, Database, Lock, Eye, EyeOff, CheckCircle2, Loader2, KeyRound,
+  User, Shield, Database, Lock, Eye, EyeOff, CheckCircle2, Loader2, KeyRound, Mail,
 } from "lucide-react";
 
 const DB_META: Record<string, { label: string; dot: string }> = {
@@ -112,24 +112,18 @@ export default function ProfielPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">E-mailadres</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-muted/40 border text-sm text-muted-foreground">
-                    {user?.email ?? "—"}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Rol</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-muted/40 border text-sm text-muted-foreground">
-                    {isAdmin ? "Beheerder (Admin)" : "Viewer"}
-                  </div>
-                </div>
+              <div className="flex items-center justify-between rounded-md bg-muted/30 border px-3 py-2.5 gap-3">
+                <p className="text-xs text-muted-foreground">
+                  E-mailadres en rol worden beheerd door de systeembeheerder.
+                </p>
+                <a
+                  href="mailto:beheer@elmar.nl?subject=Accountwijziging verzoek"
+                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline font-medium shrink-0"
+                >
+                  <Mail className="h-3 w-3" />
+                  Beheerder bereiken
+                </a>
               </div>
-
-              <p className="text-xs text-muted-foreground">
-                E-mailadres en rol kunnen alleen door een beheerder worden gewijzigd.
-              </p>
             </CardContent>
           </Card>
 
@@ -246,7 +240,6 @@ export default function ProfielPage() {
                     <div key={db} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-muted/40 border">
                       <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${meta?.dot ?? "bg-slate-400"}`} />
                       <span className="text-sm font-medium">{meta?.label ?? db}</span>
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 ml-auto" />
                     </div>
                   );
                 })
@@ -268,10 +261,8 @@ export default function ProfielPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: "Wachtwoord",         status: true,  info: "Ingesteld"        },
-                { label: "2-staps verificatie", status: true,  info: "Actief"           },
-                { label: "Sessieduur",          status: true,  info: "8 uur"            },
-                { label: "HTTPS verbinding",    status: true,  info: "Versleuteld"      },
+                { label: "2-staps verificatie", info: "Actief" },
+                { label: "Sessieduur",          info: "8 uur"  },
               ].map(item => (
                 <div key={item.label} className="flex items-center justify-between py-1.5 border-b last:border-0">
                   <span className="text-sm">{item.label}</span>
@@ -281,9 +272,13 @@ export default function ProfielPage() {
                   </div>
                 </div>
               ))}
-              <p className="text-xs text-muted-foreground pt-1">
-                2FA beheren: ga via de beheerder naar uw account-instellingen, of gebruik <span className="font-mono">/2fa-setup</span>.
-              </p>
+              <a
+                href="/2fa-setup"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline font-medium"
+              >
+                <KeyRound className="h-3 w-3" />
+                2FA opnieuw instellen
+              </a>
             </CardContent>
           </Card>
         </div>
