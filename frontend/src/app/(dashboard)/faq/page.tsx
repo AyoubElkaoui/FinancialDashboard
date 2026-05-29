@@ -166,7 +166,7 @@ export default function FaqPage() {
   return (
     <div className="space-y-6 pb-10 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-semibold">Veelgestelde vragen</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Veelgestelde vragen</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Antwoorden op de meest gestelde vragen over het gebruik van dit platform.
         </p>
