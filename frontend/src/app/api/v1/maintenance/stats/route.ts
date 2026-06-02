@@ -32,30 +32,25 @@ export async function GET(req: NextRequest) {
   ]);
 
   // Omzet — rolling vensters
+  // Omzet uit rm_werkbon.opbrengsten (AT_KLNTBREG per bon, 100% dekking)
+  // rm_journaal is niet gesyncet voor MAINTENANCE
   type OmzetRow = { som: string | null };
   const [omzetWeek, omzetMaand, omzetJaar, omzetVorigeMaand] = await Promise.all([
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(bedrag)::text AS som FROM rm_journaal
-      WHERE database::text = ${database} AND debet_credit='C' AND type_rubriek='W'
-      AND rubriek_code LIKE '8%' AND rubriek_code NOT IN ('8030','8040','8045')
-      AND datum >= ${dag7}
+      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
+      WHERE database::text = ${database} AND opbrengsten > 0 AND datum >= ${dag7}
     `,
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(bedrag)::text AS som FROM rm_journaal
-      WHERE database::text = ${database} AND debet_credit='C' AND type_rubriek='W'
-      AND rubriek_code LIKE '8%' AND rubriek_code NOT IN ('8030','8040','8045')
-      AND datum >= ${dag30}
+      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
+      WHERE database::text = ${database} AND opbrengsten > 0 AND datum >= ${dag30}
     `,
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(bedrag)::text AS som FROM rm_journaal
-      WHERE database::text = ${database} AND debet_credit='C' AND type_rubriek='W'
-      AND rubriek_code LIKE '8%' AND rubriek_code NOT IN ('8030','8040','8045')
-      AND datum >= ${startJaar}
+      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
+      WHERE database::text = ${database} AND opbrengsten > 0 AND datum >= ${startJaar}
     `,
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(bedrag)::text AS som FROM rm_journaal
-      WHERE database::text = ${database} AND debet_credit='C' AND type_rubriek='W'
-      AND rubriek_code LIKE '8%' AND rubriek_code NOT IN ('8030','8040','8045')
+      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
+      WHERE database::text = ${database} AND opbrengsten > 0
       AND datum >= ${dag30v} AND datum < ${dag30}
     `,
   ]);

@@ -18,7 +18,8 @@ import type { ElmarProjectSummary } from "@/lib/mock/elmar-data";
 // ── Type B (maintenance) ──────────────────────────────────────────────────────
 
 function MaintenanceOmzetPage() {
-  const [klantId, setKlantId]   = useState<string>("all");
+  // klantId verwijderd — klantfilter volgt later na per-klant omzet-API
+  const klantId = "all";
 
   // klantfilter tijdelijk uitgeschakeld — API-klanten zijn locaties zonder omzet-split
   const klanten: never[] = [];

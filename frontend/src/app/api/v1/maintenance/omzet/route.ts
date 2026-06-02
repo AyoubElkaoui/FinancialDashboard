@@ -1,7 +1,8 @@
 /**
  * Maintenance omzet + werkbon-tellingen.
- * Periode: ROLLING vensters (geen kalenderweek/maand die leeg kan zijn).
- * Expliciete datumfilter op boekdatum — geen all-time-optelling.
+ * Omzetbron: rm_werkbon.opbrengsten (AT_KLNTBREG per bon, 100% dekking).
+ * Dit is de juiste bron voor Maintenance: facturatie per werkbon.
+ * rm_journaal is niet gesyncet voor MAINTENANCE.
  */
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
@@ -21,18 +22,15 @@ export async function GET(req: NextRequest) {
   const now = new Date();
 
   if (periode === "maand") {
-    // Omzet per kalendermaand uit rm_journaal 8xxx (laatste 12 maanden)
-    type MaandRow = { jaar: string; maand: string; omzet: string | null };
+    // Opbrengsten per kalendermaand (rm_werkbon.opbrengsten) + werkbon-tellingen
+    type MaandRow = { jaar: string; maand: string; opbrengsten: string | null };
     const omzetRows = await db.$queryRaw<MaandRow[]>`
       SELECT EXTRACT(YEAR FROM datum)::text  AS jaar,
              EXTRACT(MONTH FROM datum)::text AS maand,
-             SUM(bedrag)::text               AS omzet
-      FROM rm_journaal
-      WHERE database::text   = ${database}
-        AND debet_credit      = 'C'
-        AND type_rubriek      = 'W'
-        AND rubriek_code LIKE '8%'
-        AND rubriek_code NOT IN ('8030','8040','8045')
+             SUM(opbrengsten)::text          AS opbrengsten
+      FROM rm_werkbon
+      WHERE database::text = ${database}
+        AND opbrengsten > 0
         AND datum >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY jaar, maand
       ORDER BY jaar, maand
@@ -42,8 +40,7 @@ export async function GET(req: NextRequest) {
     const bonRows = await db.$queryRaw<BonRow[]>`
       SELECT EXTRACT(YEAR FROM datum)::text  AS jaar,
              EXTRACT(MONTH FROM datum)::text AS maand,
-             status,
-             COUNT(*)::text                  AS aantal
+             status, COUNT(*)::text          AS aantal
       FROM rm_werkbon
       WHERE database::text = ${database}
         AND datum >= CURRENT_DATE - INTERVAL '12 months'
@@ -51,12 +48,11 @@ export async function GET(req: NextRequest) {
       ORDER BY jaar, maand, status
     `.catch(() => []);
 
-    // Combineer per jaar+maand
     const keySet = new Set([
       ...omzetRows.map(r => `${r.jaar}-${r.maand}`),
       ...bonRows.map(r => `${r.jaar}-${r.maand}`),
     ]);
-    const omzetMap = new Map(omzetRows.map(r => [`${r.jaar}-${r.maand}`, safe(r.omzet)]));
+    const omzetMap = new Map(omzetRows.map(r => [`${r.jaar}-${r.maand}`, safe(r.opbrengsten)]));
     const bonMap = new Map<string, { uitgevoerd: number; openstaand: number; totaal: number }>();
     for (const r of bonRows) {
       const key = `${r.jaar}-${r.maand}`;
@@ -83,22 +79,18 @@ export async function GET(req: NextRequest) {
     return Response.json(data);
   }
 
-  // Week-modus: omzet per ISO-week (rm_journaal) + werkbon-tellingen (rm_werkbon)
-  // Rolling 12 weken terug (niet "huidige kalenderweek" die leeg kan zijn)
+  // Week-modus: opbrengsten per ISO-week + werkbon-tellingen (rolling 12 weken)
   const twaalf_weken_geleden = new Date(now);
   twaalf_weken_geleden.setDate(now.getDate() - 84);
 
-  type WeekOmzetRow = { jaar: string; week: string; omzet: string | null };
+  type WeekOmzetRow = { jaar: string; week: string; opbrengsten: string | null };
   const omzetRows = await db.$queryRaw<WeekOmzetRow[]>`
     SELECT EXTRACT(YEAR FROM datum)::text AS jaar,
            EXTRACT(WEEK FROM datum)::text AS week,
-           SUM(bedrag)::text              AS omzet
-    FROM rm_journaal
-    WHERE database::text   = ${database}
-      AND debet_credit      = 'C'
-      AND type_rubriek      = 'W'
-      AND rubriek_code LIKE '8%'
-      AND rubriek_code NOT IN ('8030','8040','8045')
+           SUM(opbrengsten)::text         AS opbrengsten
+    FROM rm_werkbon
+    WHERE database::text = ${database}
+      AND opbrengsten > 0
       AND datum >= ${twaalf_weken_geleden}
     GROUP BY jaar, week
     ORDER BY jaar, week
@@ -108,8 +100,7 @@ export async function GET(req: NextRequest) {
   const bonRows = await db.$queryRaw<WeekBonRow[]>`
     SELECT EXTRACT(YEAR FROM datum)::text AS jaar,
            EXTRACT(WEEK FROM datum)::text AS week,
-           status,
-           COUNT(*)::text                 AS aantal
+           status, COUNT(*)::text         AS aantal
     FROM rm_werkbon
     WHERE database::text = ${database}
       AND datum >= ${twaalf_weken_geleden}
@@ -121,7 +112,7 @@ export async function GET(req: NextRequest) {
     ...omzetRows.map(r => `${r.jaar}-${r.week.padStart(2,"0")}`),
     ...bonRows.map(r => `${r.jaar}-${r.week.padStart(2,"0")}`),
   ]);
-  const omzetMap = new Map(omzetRows.map(r => [`${r.jaar}-${r.week.padStart(2,"0")}`, safe(r.omzet)]));
+  const omzetMap = new Map(omzetRows.map(r => [`${r.jaar}-${r.week.padStart(2,"0")}`, safe(r.opbrengsten)]));
   const bonMap = new Map<string, { uitgevoerd: number; openstaand: number; aangemaakt: number }>();
   for (const r of bonRows) {
     const key = `${r.jaar}-${r.week.padStart(2,"0")}`;
