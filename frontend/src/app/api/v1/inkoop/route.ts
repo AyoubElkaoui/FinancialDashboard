@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import type { Database } from "@prisma/client";
+import type { Database, Prisma } from "@prisma/client";
 
 // Kostendrager-whitelist (sync met transform.ts)
 const COST_STARTS   = ["7", "INT7"];
