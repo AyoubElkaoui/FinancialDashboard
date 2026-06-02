@@ -363,7 +363,6 @@ function EditRow({ wb, onSaved }: { wb: WbRow; onSaved: () => void }) {
 }
 
 function MaintenanceWerkbonnenInner() {
-  const qc = require("@tanstack/react-query").useQueryClient?.();
   const { get, setParams, resetParams } = useQueryParams();
   const [editingBon, setEditingBon] = useState<string | null>(null);
 

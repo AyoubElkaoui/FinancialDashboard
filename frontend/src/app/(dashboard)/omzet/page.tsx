@@ -20,11 +20,8 @@ import type { ElmarProjectSummary } from "@/lib/mock/elmar-data";
 function MaintenanceOmzetPage() {
   const [klantId, setKlantId]   = useState<string>("all");
 
-  const { data: klanten } = useQuery<(MaintenanceKlant & { summary: unknown })[]>({
-    queryKey: ["maintenance", "klanten"],
-    queryFn:  () => fetch("/api/v1/maintenance/klanten").then(r => r.json()),
-    staleTime: 300_000,
-  });
+  // klantfilter tijdelijk uitgeschakeld — API-klanten zijn locaties zonder omzet-split
+  const klanten: never[] = [];
 
   const { data: weekData, isLoading: weekLoading } = useQuery<WeekStats[]>({
     queryKey: ["maintenance", "omzet", "week", klantId],
@@ -48,13 +45,8 @@ function MaintenanceOmzetPage() {
           <h1 className="text-2xl font-bold tracking-tight">Omzet</h1>
           <p className="text-sm text-muted-foreground mt-1">Maintenance — week & maand overzicht</p>
         </div>
-        <Select value={klantId} onValueChange={(v) => setKlantId(v ?? "all")}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Alle klanten" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alle klanten</SelectItem>
-            {(klanten ?? []).map(k => <SelectItem key={k.id} value={k.id}>{k.naam}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {/* Klantfilter — volgt na per-klant API-uitbreiding */}
+        <span className="text-xs text-muted-foreground">Alle klanten</span>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

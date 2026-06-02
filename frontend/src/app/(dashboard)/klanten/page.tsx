@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
@@ -79,63 +79,85 @@ function KlantenInner() {
   );
 }
 
-// ── Type B: Maintenance klanten ───────────────────────────────────────────────
+// ── Type B: Maintenance klanten (echte rm_werkbon data) ───────────────────────
 
-interface KlantWithSummary extends MaintenanceKlant {
-  summary: {
-    week:  { omzet: number; totaal: number; uitgevoerd: number; openstaand: number };
-    maand: { omzet: number; totaal: number; uitgevoerd: number; openstaand: number };
-    jaar:  { omzet: number; totaal: number; uitgevoerd: number; openstaand: number };
-  };
+interface RealKlant {
+  klant:      string;
+  totaalBons: number;
+  week:  { openstaand: number; uitgevoerd: number; totaal: number };
+  maand: { openstaand: number; uitgevoerd: number; totaal: number };
+  jaar:  { openstaand: number; uitgevoerd: number; totaal: number };
 }
 
 function MaintenanceKlantenInner() {
-  const router = useRouter();
-  const { data, isLoading } = useQuery<KlantWithSummary[]>({
+  const [search, setSearch] = useState("");
+  const { data, isLoading } = useQuery<RealKlant[]>({
     queryKey: ["maintenance", "klanten"],
-    queryFn:  () => fetch("/api/v1/maintenance/klanten").then(r => r.json()),
+    queryFn:  () => fetch("/api/v1/maintenance/klanten?database=MAINTENANCE").then(r => r.json()),
     staleTime: 120_000,
   });
 
-  const klanten = data ?? [];
+  const klanten = (data ?? []).filter(k =>
+    !search || k.klant.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const Th = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
+    <th className={`px-3 py-2.5 text-xs font-semibold text-muted-foreground ${right ? "text-right" : "text-left"}`}>
+      {children}
+    </th>
+  );
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold tracking-tight">Klanten</h1>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Klanten</h1>
+          <p className="text-sm text-muted-foreground">
+            {data ? `${data.length} klanten met werkbonnen` : "Laden…"}
+          </p>
+        </div>
+        <input
+          type="search" placeholder="Zoek klant…" value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="h-9 w-64 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      </div>
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[700px]">
             <thead className="bg-muted/40 border-b">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Klant</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Variant</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Plaats</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground border-l">Week omzet</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Week bons</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground border-l">Maand omzet</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Maand bons</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Openstaand</th>
+                <Th>Klant / locatie</Th>
+                <Th right>Week open</Th>
+                <Th right>Week uitg.</Th>
+                <Th right>Maand open</Th>
+                <Th right>Maand uitg.</Th>
+                <Th right>Jaar totaal</Th>
+                <Th right>Totaal</Th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">Laden…</td></tr>
+                <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">Laden…</td></tr>
+              ) : klanten.length === 0 ? (
+                <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">Geen klanten gevonden</td></tr>
               ) : klanten.map((k, i) => (
-                <tr
-                  key={k.id}
-                  className={`border-b last:border-0 cursor-pointer hover:bg-muted/40 ${i % 2 === 1 ? "bg-muted/10" : ""}`}
-                  onClick={() => router.push(`/klanten/${k.id}`)}
-                >
-                  <td className="px-4 py-2.5 font-semibold">{k.naam}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground text-xs">{k.variant}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{k.plaats}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-medium border-l">{formatCurrency(k.summary.week.omzet)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{k.summary.week.totaal}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-medium border-l">{formatCurrency(k.summary.maand.omzet)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{k.summary.maand.totaal}</td>
-                  <td className={`px-4 py-2.5 text-right tabular-nums ${k.summary.maand.openstaand > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}`}>
-                    {k.summary.maand.openstaand}
+                <tr key={k.klant} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
+                  <td className="px-3 py-2.5 font-medium text-xs max-w-[220px] truncate" title={k.klant}>{k.klant}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${k.week.openstaand > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
+                    {k.week.openstaand || "—"}
                   </td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${k.week.uitgevoerd > 0 ? "text-emerald-600" : "text-muted-foreground"}`}>
+                    {k.week.uitgevoerd || "—"}
+                  </td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${k.maand.openstaand > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
+                    {k.maand.openstaand || "—"}
+                  </td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${k.maand.uitgevoerd > 0 ? "text-emerald-600" : "text-muted-foreground"}`}>
+                    {k.maand.uitgevoerd || "—"}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{k.jaar.totaal}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-xs font-semibold">{k.totaalBons}</td>
                 </tr>
               ))}
             </tbody>
