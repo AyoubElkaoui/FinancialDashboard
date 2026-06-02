@@ -259,62 +259,155 @@ function WerkbonnenInner() {
   );
 }
 
-// ── Type B: Maintenance werkbonnen ────────────────────────────────────────────
+// ── Type B: Maintenance werkbonnen (echte Atrium-data) ───────────────────────
 
-const MAINTENANCE_STATUSSEN: WerkbonStatus[] = ["AANGEMAAKT", "UITGEVOERD", "OPENSTAAND"];
-const MAINTENANCE_CATS: WerkbonCategorie[]   = ["ONDERHOUD", "EW", "CV", "SLUITING_300", "KLUSSEN_300"];
+interface WbRow {
+  BONNUMMER: string; DATUM: string; OMSCHRIJVING: string;
+  STATUS: string; STATUS_LABEL: string; METH_LABEL: string; FASE: string;
+  KLANT: string; EIGENAAR: string; IS_GEFACTUREERD: boolean;
+  VOLLEDIG_BETAALD: boolean; NOTITIES: string;
+  KOSTEN_HANDM: number | null; INDIRECT_HANDM: number | null;
+  ALG_KOSTEN_HANDM: number | null; OPBRENGSTEN_HANDM: number | null;
+  B_MARGE_HANDM: number | null;
+}
 
-const STATUS_COLORS: Record<WerkbonStatus, string> = {
-  UITGEVOERD: "text-emerald-600 dark:text-emerald-400",
-  OPENSTAAND: "text-orange-600 dark:text-orange-400",
-  AANGEMAAKT: "text-slate-500",
+const STATUS_CLR: Record<string, string> = {
+  A: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  I: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  U: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
+  V: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
 };
 
+function EditRow({ wb, onSaved }: { wb: WbRow; onSaved: () => void }) {
+  const [vals, setVals] = useState({
+    kosten:      wb.KOSTEN_HANDM      ?? "",
+    indirect:    wb.INDIRECT_HANDM    ?? "",
+    algKosten:   wb.ALG_KOSTEN_HANDM  ?? "",
+    opbrengsten: wb.OPBRENGSTEN_HANDM ?? "",
+    bMarge:      wb.B_MARGE_HANDM     ?? "",
+    betaald:     wb.VOLLEDIG_BETAALD,
+    notities:    wb.NOTITIES,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const body = {
+      kostenHandm:      vals.kosten      !== "" ? Number(vals.kosten)      : null,
+      indirectHandm:    vals.indirect    !== "" ? Number(vals.indirect)    : null,
+      algKostenHandm:   vals.algKosten   !== "" ? Number(vals.algKosten)   : null,
+      opbrengstenHandm: vals.opbrengsten !== "" ? Number(vals.opbrengsten) : null,
+      bMargeHandm:      vals.bMarge      !== "" ? Number(vals.bMarge)      : null,
+      volledigBetaald:  vals.betaald,
+      notities:         vals.notities || null,
+    };
+    const r = await fetch(`/api/v1/maintenance/werkbonnen/${wb.BONNUMMER}?database=MAINTENANCE`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    setSaving(false);
+    if (r.ok) { toast.success("Opgeslagen"); onSaved(); }
+    else        toast.error("Opslaan mislukt");
+  };
+
+  const inp = (label: string, key: keyof typeof vals, prefix = "€") => (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
+      <div className="flex items-center gap-1">
+        {prefix && <span className="text-xs text-muted-foreground">{prefix}</span>}
+        <input
+          type="number" step="0.01"
+          value={vals[key] as string | number}
+          onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
+          className="w-24 h-7 text-xs px-2 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring tabular-nums"
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <td colSpan={99} className="bg-muted/30 px-4 py-3">
+      <div className="flex flex-wrap items-end gap-4">
+        {inp("Kosten", "kosten")}
+        {inp("Indirect", "indirect")}
+        {inp("Alg. kosten", "algKosten")}
+        {inp("Opbrengsten", "opbrengsten")}
+        {inp("B Marge", "bMarge")}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Vol. betaald</label>
+          <button
+            onClick={() => setVals(v => ({ ...v, betaald: !v.betaald }))}
+            className={`h-7 w-16 rounded-md text-xs font-semibold border transition-colors ${vals.betaald ? "bg-emerald-500 text-white border-emerald-500" : "bg-background text-muted-foreground"}`}
+          >
+            {vals.betaald ? "Ja" : "Nee"}
+          </button>
+        </div>
+        <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Notities</label>
+          <input
+            type="text"
+            value={vals.notities}
+            onChange={e => setVals(v => ({ ...v, notities: e.target.value }))}
+            className="h-7 text-xs px-2 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring w-full"
+          />
+        </div>
+        <button
+          onClick={save} disabled={saving}
+          className="h-7 px-3 rounded-md bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+        >
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+          Opslaan
+        </button>
+      </div>
+    </td>
+  );
+}
+
 function MaintenanceWerkbonnenInner() {
+  const qc = require("@tanstack/react-query").useQueryClient?.();
   const { get, setParams, resetParams } = useQueryParams();
+  const [editingBon, setEditingBon] = useState<string | null>(null);
+
   const params = {
+    database:  "MAINTENANCE",
     page:      Number(get("page") ?? 1),
     pageSize:  Number(get("pageSize") ?? 50),
     search:    get("search") ?? undefined,
-    status:    get("status") as WerkbonStatus | undefined,
-    categorie: get("categorie") as WerkbonCategorie | undefined,
-    klantId:   get("klantId") ?? undefined,
+    status:    get("status") ?? undefined,
     dateFrom:  get("dateFrom") ?? undefined,
     dateTo:    get("dateTo") ?? undefined,
   };
 
   const qs = new URLSearchParams();
-  qs.set("page",     String(params.page));
-  qs.set("pageSize", String(params.pageSize));
-  if (params.search)    qs.set("search",    params.search);
-  if (params.status)    qs.set("status",    params.status);
-  if (params.categorie) qs.set("categorie", params.categorie);
-  if (params.klantId)   qs.set("klantId",   params.klantId);
-  if (params.dateFrom)  qs.set("dateFrom",  params.dateFrom);
-  if (params.dateTo)    qs.set("dateTo",    params.dateTo);
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined) qs.set(k, String(v)); });
 
-  const { data, isLoading } = useQuery<{ data: MaintenanceWerkbon[]; total: number }>({
-    queryKey: ["maintenance", "werkbonnen", params],
+  const { data, isLoading, refetch } = useQuery<{ data: WbRow[]; total: number; totalPages: number }>({
+    queryKey: ["maintenance", "werkbonnen-list", params],
     queryFn:  () => fetch(`/api/v1/maintenance/werkbonnen?${qs}`).then(r => r.json()),
   });
 
-  const { data: klanten } = useQuery<{ id: string; naam: string }[]>({
-    queryKey: ["maintenance", "klanten"],
-    queryFn:  () => fetch("/api/v1/maintenance/klanten").then(r => r.json()),
-    staleTime: 300_000,
-  });
-
   const bons = data?.data ?? [];
+
+  const Th = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
+    <th className={`px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap ${right ? "text-right" : "text-left"}`}>
+      {children}
+    </th>
+  );
+
+  const fmt = (v: number | null) => v != null ? formatCurrency(v) : <span className="text-muted-foreground">—</span>;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Werkbonnen</h1>
-          <p className="text-sm text-muted-foreground">{data?.total != null ? `${data.total} werkbonnen` : "Laden…"}</p>
+          <p className="text-sm text-muted-foreground">
+            {data?.total != null ? `${data.total.toLocaleString("nl-NL")} werkbonnen` : "Laden…"}
+            <span className="ml-2 text-[11px] text-muted-foreground/70">· server-side paginatie · klik ✎ voor handmatige velden</span>
+          </p>
         </div>
       </div>
 
+      {/* Filters */}
       <FilterBar
         search={params.search}
         onSearchChange={v => setParams({ search: v, page: "1" })}
@@ -324,77 +417,115 @@ function MaintenanceWerkbonnenInner() {
         onReset={resetParams}
       >
         <Select value={params.status ?? "alle"} onValueChange={v => setParams({ status: v === "alle" ? null : v, page: "1" })}>
-          <SelectTrigger className="h-8 w-36 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-38 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="alle">Alle statussen</SelectItem>
-            {MAINTENANCE_STATUSSEN.map(s => <SelectItem key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={params.categorie ?? "alle"} onValueChange={v => setParams({ categorie: v === "alle" ? null : v, page: "1" })}>
-          <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder="Categorie" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="alle">Alle categorieën</SelectItem>
-            {MAINTENANCE_CATS.map(c => <SelectItem key={c} value={c}>{CATEGORIE_LABELS[c]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={params.klantId ?? "alle"} onValueChange={v => setParams({ klantId: v === "alle" ? null : v, page: "1" })}>
-          <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder="Klant" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="alle">Alle klanten</SelectItem>
-            {(klanten ?? []).map(k => <SelectItem key={k.id} value={k.id}>{k.naam}</SelectItem>)}
+            <SelectItem value="openstaand">Openstaand (A+I)</SelectItem>
+            <SelectItem value="afgerond">Afgerond (U+V)</SelectItem>
+            <SelectItem value="A">Aangemaakt</SelectItem>
+            <SelectItem value="I">In uitvoering</SelectItem>
+            <SelectItem value="U">Uitgevoerd</SelectItem>
+            <SelectItem value="V">Voltoooid</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>
 
+      {/* Tabel */}
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-muted/40 border-b">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Bon-ID</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Klant</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Categorie</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Omschrijving</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Technicus</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Datum</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Omzet</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Status</th>
+                <Th>Bonnummer</Th>
+                <Th>Datum</Th>
+                <Th>Klant</Th>
+                <Th>Omschrijving</Th>
+                <Th>Status</Th>
+                <Th>Fase</Th>
+                <Th>Eigenaar</Th>
+                <Th>Fact.</Th>
+                <Th right>Kosten</Th>
+                <Th right>Indirect</Th>
+                <Th right>Opbr.</Th>
+                <Th right>B Marge</Th>
+                <Th>Betaald</Th>
+                <Th>{""}</Th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">Laden…</td></tr>
+                <tr><td colSpan={14} className="py-12 text-center text-muted-foreground">Laden…</td></tr>
               ) : bons.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">Geen werkbonnen gevonden</td></tr>
-              ) : bons.map((b, i) => (
-                <tr key={b.id} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
-                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{b.id}</td>
-                  <td className="px-4 py-2.5 font-medium">{b.klantNaam}</td>
-                  <td className="px-4 py-2.5 text-xs"><span className="rounded-md bg-muted px-2 py-0.5">{CATEGORIE_LABELS[b.categorie]}</span></td>
-                  <td className="px-4 py-2.5 text-muted-foreground max-w-[200px] truncate">{b.omschrijving}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{b.technicus}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{b.datum}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                    {b.omzet > 0 ? formatCurrency(b.omzet) : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className={`px-4 py-2.5 text-xs font-semibold ${STATUS_COLORS[b.status]}`}>{b.status.charAt(0) + b.status.slice(1).toLowerCase()}</td>
-                </tr>
-              ))}
+                <tr><td colSpan={14} className="py-12 text-center text-muted-foreground">Geen werkbonnen gevonden</td></tr>
+              ) : bons.flatMap((wb, i) => {
+                const editing = editingBon === wb.BONNUMMER;
+                const rows = [
+                  <tr key={wb.BONNUMMER} className={`border-b hover:bg-muted/30 transition-colors ${editing ? "bg-blue-50 dark:bg-blue-950/20" : i % 2 === 1 ? "bg-muted/10" : ""}`}>
+                    <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{wb.BONNUMMER}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(wb.DATUM)}</td>
+                    <td className="px-3 py-2.5 max-w-[160px] truncate text-xs" title={wb.KLANT}>{wb.KLANT || "—"}</td>
+                    <td className="px-3 py-2.5 max-w-[180px] truncate text-xs text-muted-foreground" title={wb.OMSCHRIJVING}>{wb.OMSCHRIJVING || "—"}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_CLR[wb.STATUS] ?? ""}`}>
+                        {wb.STATUS_LABEL}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground max-w-[120px] truncate">{wb.FASE || "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{wb.EIGENAAR || "—"}</td>
+                    <td className="px-3 py-2.5 text-center text-xs">
+                      {wb.IS_GEFACTUREERD
+                        ? <span className="text-emerald-600 font-semibold">✓</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmt(wb.KOSTEN_HANDM)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{fmt(wb.INDIRECT_HANDM)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmt(wb.OPBRENGSTEN_HANDM)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums text-xs font-semibold ${wb.B_MARGE_HANDM != null ? (wb.B_MARGE_HANDM >= 0 ? "text-emerald-600" : "text-red-600") : ""}`}>
+                      {fmt(wb.B_MARGE_HANDM)}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs">
+                      {wb.VOLLEDIG_BETAALD
+                        ? <span className="text-emerald-600 font-semibold">✓</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button
+                        onClick={() => setEditingBon(editing ? null : wb.BONNUMMER)}
+                        className={`h-6 w-6 flex items-center justify-center rounded text-xs transition-colors ${editing ? "bg-blue-600 text-white" : "hover:bg-muted text-muted-foreground"}`}
+                        title="Handmatige velden bewerken"
+                      >
+                        ✎
+                      </button>
+                    </td>
+                  </tr>
+                ];
+                if (editing) {
+                  rows.push(
+                    <tr key={`${wb.BONNUMMER}-edit`} className="border-b bg-blue-50 dark:bg-blue-950/20">
+                      <EditRow wb={wb} onSaved={() => { refetch(); }} />
+                    </tr>
+                  );
+                }
+                return rows;
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Pagination */}
-      {(data?.total ?? 0) > params.pageSize && (
-        <div className="flex justify-end gap-2 text-sm">
+      {/* Paginatie */}
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">
+          {data?.total ? `${((params.page - 1) * params.pageSize + 1).toLocaleString("nl-NL")}–${Math.min(params.page * params.pageSize, data.total).toLocaleString("nl-NL")} van ${data.total.toLocaleString("nl-NL")}` : ""}
+        </span>
+        <div className="flex gap-2">
           <button disabled={params.page <= 1} onClick={() => setParams({ page: String(params.page - 1) })}
-            className="px-3 py-1.5 rounded border hover:bg-muted disabled:opacity-40">Vorige</button>
-          <span className="px-3 py-1.5 text-muted-foreground">Pagina {params.page}</span>
-          <button disabled={(data?.total ?? 0) <= params.page * params.pageSize} onClick={() => setParams({ page: String(params.page + 1) })}
-            className="px-3 py-1.5 rounded border hover:bg-muted disabled:opacity-40">Volgende</button>
+            className="px-3 py-1.5 rounded-md border hover:bg-muted disabled:opacity-40 text-xs">← Vorige</button>
+          <span className="px-3 py-1.5 text-muted-foreground text-xs">Pagina {params.page} / {data?.totalPages ?? "…"}</span>
+          <button disabled={params.page >= (data?.totalPages ?? 1)} onClick={() => setParams({ page: String(params.page + 1) })}
+            className="px-3 py-1.5 rounded-md border hover:bg-muted disabled:opacity-40 text-xs">Volgende →</button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
