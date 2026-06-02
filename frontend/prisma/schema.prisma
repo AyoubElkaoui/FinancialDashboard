@@ -111,3 +111,67 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
 }
+
+// ─── Read-model: gesynchroniseerde Firebird-data ──────────────────────────────
+
+model RmProjectSummary {
+  id              String   @id @default(cuid())
+  database        Database
+  projectNr       String   @map("project_nr")
+  naam            String
+  klant           String   @default("")
+  status          String   @default("ACTIEF")
+  aanneemsom      Decimal  @default(0) @db.Decimal(15, 2)
+  gefactureerd    Decimal  @default(0) @db.Decimal(15, 2)
+  onbetaald       Decimal  @default(0) @db.Decimal(15, 2)
+  kostenMateriaal Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_materiaal")
+  kostenArbeid    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_arbeid")
+  kostenOverig    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_overig")
+  urenTotaal      Decimal  @default(0) @db.Decimal(10, 2) @map("uren_totaal")
+  synctOp         DateTime @default(now()) @updatedAt @map("synct_op")
+
+  @@unique([database, projectNr])
+  @@index([database])
+  @@map("rm_project_summary")
+}
+
+model RmJournaal {
+  id            String   @id @default(cuid())
+  database      Database
+  projectNr     String   @map("project_nr")
+  datum         DateTime
+  rubriekCode   String   @map("rubriek_code")
+  rubriekOmschr String   @map("rubriek_omschr")
+  typeRubriek   String   @map("type_rubriek")
+  debetCredit   String   @map("debet_credit")
+  bedrag        Decimal  @db.Decimal(15, 2)
+  omschrijving  String?
+
+  @@index([database, projectNr])
+  @@map("rm_journaal")
+}
+
+model RmUren {
+  id           String   @id @default(cuid())
+  database     Database
+  projectNr    String   @map("project_nr")
+  medewerker   String
+  datum        DateTime
+  aantal       Decimal  @db.Decimal(10, 2)
+  omschrijving String?
+
+  @@index([database, projectNr])
+  @@map("rm_uren")
+}
+
+model RmSyncMeta {
+  id             String   @id @default(cuid())
+  database       Database @unique
+  status         String   @default("pending")
+  gesynctOp      DateTime @default(now()) @map("gesynct_op")
+  duurMs         Int?     @map("duur_ms")
+  projectenCount Int?     @map("projecten_count")
+  fout           String?
+
+  @@map("rm_sync_meta")
+}
