@@ -102,9 +102,10 @@ export function fbQuery<T extends Record<string, string> = Record<string, string
         connStr(),
       ],
       {
-        encoding: "buffer",
-        env:     { ...process.env, LD_LIBRARY_PATH: FB_LD_LIBRARY },
-        timeout: 120_000,
+        encoding:  "buffer",
+        env:       { ...process.env, LD_LIBRARY_PATH: FB_LD_LIBRARY },
+        timeout:   300_000,           // 5 min voor grote queries
+        maxBuffer: 256 * 1024 * 1024, // 256 MB — journaal kan groot zijn
       }
     );
 

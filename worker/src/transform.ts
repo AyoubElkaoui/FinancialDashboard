@@ -8,8 +8,6 @@ import type { FbRubriek, FbJournaalAgg } from "./queries";
  * - '-' is een ongecategoriseerde vangstrubriek.
  */
 const OVERHEAD_EXCLUSIONS = new Set([
-  "-",
-  "5569", // Reiskosten — wacht op bevestiging: overhead (nu excluded)
   "5514",
   "5561",
   "5574",

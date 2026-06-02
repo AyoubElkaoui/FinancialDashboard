@@ -85,12 +85,14 @@ export function fetchRubrieken(): FbRubriek[] {
       AND GC_CODE IS NOT NULL
     ORDER BY GC_CODE;
   `);
-  return rows.map(r => ({
-    GC_ID:           toInt(r.GC_ID),
-    GC_CODE:         r.GC_CODE.trim(),
-    GC_OMSCHRIJVING: r.GC_OMSCHRIJVING.trim(),
-    TYPE_RUBRIEK:    r.TYPE_RUBRIEK.trim(),
-  }));
+  return rows
+    .filter(r => r.GC_ID && r.GC_CODE)
+    .map(r => ({
+      GC_ID:           toInt(r.GC_ID),
+      GC_CODE:         (r.GC_CODE ?? "").trim(),
+      GC_OMSCHRIJVING: (r.GC_OMSCHRIJVING ?? "").trim(),
+      TYPE_RUBRIEK:    (r.TYPE_RUBRIEK ?? "").trim(),
+    }));
 }
 
 /** Alle projecten (AT_WERK) voor één administratie. */
@@ -190,34 +192,37 @@ export function fetchJournaalDetail(adminId: number): FbJournaalDetail[] {
   const rows = fbQuery(`
     SELECT
       j.WERK_GC_ID,
-      CAST(j.DATUM AS VARCHAR(10))        AS DATUM,
-      r.GC_CODE                           AS RUBRIEK_CODE,
-      r.GC_OMSCHRIJVING                   AS RUBRIEK_OMSCHR,
+      CAST(CAST(s.DOORBOEKDATUM AS DATE) AS VARCHAR(10)) AS DATUM,
+      r.GC_CODE                                          AS RUBRIEK_CODE,
+      r.GC_OMSCHRIJVING                                  AS RUBRIEK_OMSCHR,
       r.TYPE_RUBRIEK,
       j.DEBET_CREDIT,
       j.BEDRAG,
-      j.OMSCHRIJVING
+      j.GC_OMSCHRIJVING                                  AS OMSCHRIJVING
     FROM AT_JOURNAAL j
     JOIN AT_RUBRIEK r ON r.GC_ID = j.RUBRIEK_GC_ID
+    JOIN AT_SESSIE s   ON s.GC_ID = j.SESSIE_GC_ID
     WHERE j.WERK_GC_ID IN (
       SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND j.WERK_GC_ID IS NOT NULL
       AND j.WERK_GC_ID <> 0
       AND r.TYPE_RUBRIEK IN ('W', 'B')
-      AND j.DATUM >= CURRENT_DATE - 365
-    ORDER BY j.DATUM DESC;
+      AND CAST(s.DOORBOEKDATUM AS DATE) >= CURRENT_DATE - 365
+    ORDER BY s.DOORBOEKDATUM DESC;
   `);
-  return rows.map(r => ({
-    WERK_GC_ID:    toInt(r.WERK_GC_ID),
-    DATUM:         r.DATUM.trim(),
-    RUBRIEK_CODE:  r.RUBRIEK_CODE.trim(),
-    RUBRIEK_OMSCHR: r.RUBRIEK_OMSCHR.trim(),
-    TYPE_RUBRIEK:  r.TYPE_RUBRIEK.trim(),
-    DEBET_CREDIT:  r.DEBET_CREDIT.trim(),
-    BEDRAG:        toNum(r.BEDRAG),
-    OMSCHRIJVING:  toNull(r.OMSCHRIJVING ?? ""),
-  }));
+  return rows
+    .filter(r => r.WERK_GC_ID && r.RUBRIEK_CODE && r.DEBET_CREDIT)
+    .map(r => ({
+      WERK_GC_ID:    toInt(r.WERK_GC_ID),
+      DATUM:         (r.DATUM ?? "").trim(),
+      RUBRIEK_CODE:  (r.RUBRIEK_CODE ?? "").trim(),
+      RUBRIEK_OMSCHR: (r.RUBRIEK_OMSCHR ?? "").trim(),
+      TYPE_RUBRIEK:  (r.TYPE_RUBRIEK ?? "").trim(),
+      DEBET_CREDIT:  (r.DEBET_CREDIT ?? "").trim(),
+      BEDRAG:        toNum(r.BEDRAG ?? "0"),
+      OMSCHRIJVING:  toNull(r.OMSCHRIJVING ?? ""),
+    }));
 }
 
 /** Uren-totalen per project. */
@@ -245,24 +250,26 @@ export function fetchUrenDetail(adminId: number): FbUrenDetail[] {
   const rows = fbQuery(`
     SELECT
       u.WERK_GC_ID,
-      COALESCE(m.GC_OMSCHRIJVING, 'Onbekend') AS MEDEWERKER,
-      CAST(u.DATUM AS VARCHAR(10))             AS DATUM,
+      COALESCE(m.GC_OMSCHRIJVING, 'Onbekend')  AS MEDEWERKER,
+      CAST(CAST(u.DATUM AS DATE) AS VARCHAR(10)) AS DATUM,
       u.AANTAL,
-      u.OMSCHRIJVING
+      u.GC_OMSCHRIJVING                         AS OMSCHRIJVING
     FROM AT_URENBREG u
     LEFT JOIN AT_MEDEW m ON m.GC_ID = u.MEDEW_GC_ID
     WHERE u.WERK_GC_ID IN (
       SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND u.WERK_GC_ID IS NOT NULL
-      AND u.DATUM >= CURRENT_DATE - 365
+      AND CAST(u.DATUM AS DATE) >= CURRENT_DATE - 365
     ORDER BY u.DATUM DESC;
   `);
-  return rows.map(r => ({
-    WERK_GC_ID:  toInt(r.WERK_GC_ID),
-    MEDEWERKER:  r.MEDEWERKER.trim(),
-    DATUM:       r.DATUM.trim(),
-    AANTAL:      toNum(r.AANTAL),
-    OMSCHRIJVING: toNull(r.OMSCHRIJVING ?? ""),
-  }));
+  return rows
+    .filter(r => r.WERK_GC_ID && r.DATUM && r.AANTAL)
+    .map(r => ({
+      WERK_GC_ID:  toInt(r.WERK_GC_ID),
+      MEDEWERKER:  (r.MEDEWERKER ?? "Onbekend").trim(),
+      DATUM:       (r.DATUM ?? "").trim(),
+      AANTAL:      toNum(r.AANTAL ?? "0"),
+      OMSCHRIJVING: toNull(r.OMSCHRIJVING ?? ""),
+    }));
 }
