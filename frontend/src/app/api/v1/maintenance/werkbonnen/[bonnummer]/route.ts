@@ -22,13 +22,10 @@ export async function PATCH(
   if (!body) return Response.json({ error: "Ongeldig verzoek" }, { status: 400 });
 
   const update: Record<string, unknown> = {};
-  if ("kostenHandm"      in body) update.kostenHandm      = body.kostenHandm ?? null;
-  if ("indirectHandm"    in body) update.indirectHandm    = body.indirectHandm ?? null;
-  if ("algKostenHandm"   in body) update.algKostenHandm   = body.algKostenHandm ?? null;
-  if ("opbrengstenHandm" in body) update.opbrengstenHandm = body.opbrengstenHandm ?? null;
-  if ("bMargeHandm"      in body) update.bMargeHandm      = body.bMargeHandm ?? null;
-  if ("volledigBetaald"  in body) update.volledigBetaald  = body.volledigBetaald ?? null;
-  if ("notities"         in body) update.notities         = body.notities ?? null;
+  // Enige handmatige velden — sync raakt deze NOOIT aan
+  if ("streefmargePct"  in body) update.streefmargePct  = body.streefmargePct ?? null;
+  if ("volledigBetaald" in body) update.volledigBetaald = body.volledigBetaald ?? null;
+  if ("notities"        in body) update.notities        = body.notities ?? null;
 
   if (Object.keys(update).length === 0) {
     return Response.json({ error: "Geen velden om bij te werken" }, { status: 400 });

@@ -75,11 +75,20 @@ export async function GET(req: NextRequest) {
     WERK_CODE:         wb.werkCode ?? "",
     IS_GEFACTUREERD:   wb.isGefactureerd,
     VOLLEDIG_BETAALD:  wb.volledigBetaald ?? false,
-    KOSTEN_HANDM:      wb.kostenHandm      != null ? Number(wb.kostenHandm)      : null,
-    INDIRECT_HANDM:    wb.indirectHandm    != null ? Number(wb.indirectHandm)    : null,
-    ALG_KOSTEN_HANDM:  wb.algKostenHandm   != null ? Number(wb.algKostenHandm)   : null,
-    OPBRENGSTEN_HANDM: wb.opbrengstenHandm != null ? Number(wb.opbrengstenHandm) : null,
-    B_MARGE_HANDM:     wb.bMargeHandm      != null ? Number(wb.bMargeHandm)      : null,
+    // Financieel uit DB
+    OPBRENGSTEN:       Number(wb.opbrengsten ?? 0),
+    UREN_WERKBON:      wb.urenWerkbon != null ? Number(wb.urenWerkbon) : null,
+    // Berekend (indirect = uren × €7.5; marge = opbrengsten - indirect)
+    INDIRECT:          wb.urenWerkbon != null ? Number(wb.urenWerkbon) * 7.5 : null,
+    B_MARGE:           wb.urenWerkbon != null
+                         ? Number(wb.opbrengsten ?? 0) - Number(wb.urenWerkbon) * 7.5
+                         : null,
+    MARGE_PCT:         (wb.urenWerkbon != null && Number(wb.opbrengsten ?? 0) > 0)
+                         ? ((Number(wb.opbrengsten ?? 0) - Number(wb.urenWerkbon) * 7.5)
+                            / Number(wb.opbrengsten)) * 100
+                         : null,
+    // Handmatig
+    STREEFMARGE_PCT:   wb.streefmargePct != null ? Number(wb.streefmargePct) : null,
     NOTITIES:          wb.notities ?? "",
   }));
 

@@ -33,8 +33,10 @@ function MaintenanceOmzetPage() {
     queryFn:  () => fetch(`/api/v1/maintenance/omzet?periode=maand&n=12${klantId !== "all" ? `&klantId=${klantId}` : ""}`).then(r => r.json()),
   });
 
-  const weekTotaal  = (weekData ?? []).reduce((s, w) => s + w.omzet, 0);
-  const maandTotaal = (maandData ?? []).reduce((s, m) => s + m.omzet, 0);
+  // Guard tegen NaN (SUM kan null retourneren als geen records matchen)
+  const safeNum = (v: unknown) => (isFinite(Number(v)) ? Number(v) : 0);
+  const weekTotaal  = (weekData ?? []).reduce((s, w) => s + safeNum(w.omzet), 0);
+  const maandTotaal = (maandData ?? []).reduce((s, m) => s + safeNum(m.omzet), 0);
   const huidigWeek  = weekData?.[weekData.length - 1];
   const huidigMaand = maandData?.[maandData.length - 1];
 
@@ -51,8 +53,8 @@ function MaintenanceOmzetPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Deze week",    value: formatCurrency(huidigWeek?.omzet  ?? 0) },
-          { label: "Deze maand",   value: formatCurrency(huidigMaand?.omzet ?? 0) },
+          { label: "Afg. 7 dagen",     value: formatCurrency(safeNum(huidigWeek?.omzet)) },
+          { label: "Afg. 30 dagen",    value: formatCurrency(safeNum(huidigMaand?.omzet)) },
           { label: "12 weken totaal",  value: formatCurrency(weekTotaal) },
           { label: "12 maanden totaal", value: formatCurrency(maandTotaal) },
         ].map(c => (

@@ -265,10 +265,11 @@ interface WbRow {
   BONNUMMER: string; DATUM: string; OMSCHRIJVING: string;
   STATUS: string; STATUS_LABEL: string; METH_LABEL: string; FASE: string;
   KLANT: string; EIGENAAR: string; IS_GEFACTUREERD: boolean;
-  VOLLEDIG_BETAALD: boolean; NOTITIES: string;
-  KOSTEN_HANDM: number | null; INDIRECT_HANDM: number | null;
-  ALG_KOSTEN_HANDM: number | null; OPBRENGSTEN_HANDM: number | null;
-  B_MARGE_HANDM: number | null;
+  // Financieel uit DB
+  OPBRENGSTEN: number; UREN_WERKBON: number | null;
+  INDIRECT: number | null; B_MARGE: number | null; MARGE_PCT: number | null;
+  // Handmatig
+  STREEFMARGE_PCT: number | null; VOLLEDIG_BETAALD: boolean; NOTITIES: string;
 }
 
 const STATUS_CLR: Record<string, string> = {
@@ -280,11 +281,7 @@ const STATUS_CLR: Record<string, string> = {
 
 function EditRow({ wb, onSaved }: { wb: WbRow; onSaved: () => void }) {
   const [vals, setVals] = useState({
-    kosten:      wb.KOSTEN_HANDM      ?? "",
-    indirect:    wb.INDIRECT_HANDM    ?? "",
-    algKosten:   wb.ALG_KOSTEN_HANDM  ?? "",
-    opbrengsten: wb.OPBRENGSTEN_HANDM ?? "",
-    bMarge:      wb.B_MARGE_HANDM     ?? "",
+    streefmarge: wb.STREEFMARGE_PCT ?? "",
     betaald:     wb.VOLLEDIG_BETAALD,
     notities:    wb.NOTITIES,
   });
@@ -293,13 +290,9 @@ function EditRow({ wb, onSaved }: { wb: WbRow; onSaved: () => void }) {
   const save = async () => {
     setSaving(true);
     const body = {
-      kostenHandm:      vals.kosten      !== "" ? Number(vals.kosten)      : null,
-      indirectHandm:    vals.indirect    !== "" ? Number(vals.indirect)    : null,
-      algKostenHandm:   vals.algKosten   !== "" ? Number(vals.algKosten)   : null,
-      opbrengstenHandm: vals.opbrengsten !== "" ? Number(vals.opbrengsten) : null,
-      bMargeHandm:      vals.bMarge      !== "" ? Number(vals.bMarge)      : null,
-      volledigBetaald:  vals.betaald,
-      notities:         vals.notities || null,
+      streefmargePct: vals.streefmarge !== "" ? Number(vals.streefmarge) : null,
+      volledigBetaald: vals.betaald,
+      notities: vals.notities || null,
     };
     const r = await fetch(`/api/v1/maintenance/werkbonnen/${wb.BONNUMMER}?database=MAINTENANCE`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -309,29 +302,19 @@ function EditRow({ wb, onSaved }: { wb: WbRow; onSaved: () => void }) {
     else        toast.error("Opslaan mislukt");
   };
 
-  const inp = (label: string, key: keyof typeof vals, prefix = "€") => (
-    <div className="flex flex-col gap-1">
-      <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
-      <div className="flex items-center gap-1">
-        {prefix && <span className="text-xs text-muted-foreground">{prefix}</span>}
-        <input
-          type="number" step="0.01"
-          value={vals[key] as string | number}
-          onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
-          className="w-24 h-7 text-xs px-2 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring tabular-nums"
-        />
-      </div>
-    </div>
-  );
-
   return (
     <td colSpan={99} className="bg-muted/30 px-4 py-3">
       <div className="flex flex-wrap items-end gap-4">
-        {inp("Kosten", "kosten")}
-        {inp("Indirect", "indirect")}
-        {inp("Alg. kosten", "algKosten")}
-        {inp("Opbrengsten", "opbrengsten")}
-        {inp("B Marge", "bMarge")}
+        {/* Alle financiële velden komen uit de DB — alleen streefmarge is handmatig */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Streefmarge %</label>
+          <input
+            type="number" step="0.1" min="0" max="100"
+            value={vals.streefmarge as string | number}
+            onChange={e => setVals(v => ({ ...v, streefmarge: e.target.value }))}
+            className="w-20 h-7 text-xs px-2 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring tabular-nums"
+          />
+        </div>
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Vol. betaald</label>
           <button
@@ -343,15 +326,12 @@ function EditRow({ wb, onSaved }: { wb: WbRow; onSaved: () => void }) {
         </div>
         <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Notities</label>
-          <input
-            type="text"
-            value={vals.notities}
+          <input type="text" value={vals.notities}
             onChange={e => setVals(v => ({ ...v, notities: e.target.value }))}
             className="h-7 text-xs px-2 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring w-full"
           />
         </div>
-        <button
-          onClick={save} disabled={saving}
+        <button onClick={save} disabled={saving}
           className="h-7 px-3 rounded-md bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
         >
           {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
@@ -443,10 +423,12 @@ function MaintenanceWerkbonnenInner() {
                 <Th>Fase</Th>
                 <Th>Eigenaar</Th>
                 <Th>Fact.</Th>
-                <Th right>Kosten</Th>
+                <Th right>Opbrengsten</Th>
+                <Th right>Uren</Th>
                 <Th right>Indirect</Th>
-                <Th right>Opbr.</Th>
                 <Th right>B Marge</Th>
+                <Th right>%</Th>
+                <Th right>Streef%</Th>
                 <Th>Betaald</Th>
                 <Th>{""}</Th>
               </tr>
@@ -476,11 +458,23 @@ function MaintenanceWerkbonnenInner() {
                         ? <span className="text-emerald-600 font-semibold">✓</span>
                         : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmt(wb.KOSTEN_HANDM)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{fmt(wb.INDIRECT_HANDM)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmt(wb.OPBRENGSTEN_HANDM)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums text-xs font-semibold ${wb.B_MARGE_HANDM != null ? (wb.B_MARGE_HANDM >= 0 ? "text-emerald-600" : "text-red-600") : ""}`}>
-                      {fmt(wb.B_MARGE_HANDM)}
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs font-medium">
+                      {wb.OPBRENGSTEN > 0 ? fmt(wb.OPBRENGSTEN) : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
+                      {wb.UREN_WERKBON != null ? wb.UREN_WERKBON.toFixed(1) : <span className="text-muted-foreground/40">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
+                      {wb.INDIRECT != null ? fmt(wb.INDIRECT) : <span className="text-muted-foreground/40">—</span>}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums text-xs font-semibold ${wb.B_MARGE != null ? (wb.B_MARGE >= 0 ? "text-emerald-600" : "text-red-600") : ""}`}>
+                      {wb.B_MARGE != null ? fmt(wb.B_MARGE) : <span className="text-muted-foreground/40">—</span>}
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${wb.MARGE_PCT != null ? (wb.MARGE_PCT >= 20 ? "text-emerald-600" : wb.MARGE_PCT >= 0 ? "text-amber-600" : "text-red-600") : ""}`}>
+                      {wb.MARGE_PCT != null ? `${wb.MARGE_PCT.toFixed(1)}%` : <span className="text-muted-foreground/40">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-blue-600">
+                      {wb.STREEFMARGE_PCT != null ? `${wb.STREEFMARGE_PCT.toFixed(1)}%` : <span className="text-muted-foreground/40">—</span>}
                     </td>
                     <td className="px-3 py-2.5 text-center text-xs">
                       {wb.VOLLEDIG_BETAALD

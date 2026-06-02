@@ -127,14 +127,13 @@ model RmWerkbon {
   eigenaar         String?
   werkCode         String?  @map("werk_code")
   isGefactureerd   Boolean  @default(false) @map("is_gefactureerd")
+  // Financiële velden uit DB (sync vult/overschrijft deze)
+  opbrengsten      Decimal? @db.Decimal(12, 2)                   // AT_KLNTBREG sum per bon
+  urenWerkbon      Decimal? @db.Decimal(10, 2) @map("uren_werkbon") // AT_URENBREG sum per bon (23% dekking)
   synctOp          DateTime @default(now()) @updatedAt @map("synct_op")
 
-  // Handmatige velden — sync overschrijft NOOIT
-  kostenHandm      Decimal? @db.Decimal(12, 2) @map("kosten_handm")
-  indirectHandm    Decimal? @db.Decimal(12, 2) @map("indirect_handm")
-  algKostenHandm   Decimal? @db.Decimal(12, 2) @map("alg_kosten_handm")
-  opbrengstenHandm Decimal? @db.Decimal(12, 2) @map("opbrengsten_handm")
-  bMargeHandm      Decimal? @db.Decimal(12, 2) @map("b_marge_handm")
+  // Handmatig — ENIGE invulveld (sync raakt dit NOOIT aan)
+  streefmargePct   Decimal? @db.Decimal(5, 2) @map("streefmarge_pct") // doelmarge %
   volledigBetaald  Boolean? @map("volledig_betaald")
   notities         String?
 

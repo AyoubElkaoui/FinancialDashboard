@@ -134,27 +134,27 @@ export function MaintenanceDashboard() {
             icon={CheckCircle2} color="green"
           />
           <StatCard
-            label="Bons deze week"
+            label="Bons afg. 7 dagen"
             value={statsLoading ? "—" : String(stats?.werkbonnen.weekBons ?? 0)}
-            sub="geboekt op boekdatum"
+            sub="op boekdatum"
             icon={Wrench} color="slate"
           />
           <StatCard
-            label="Bons deze maand"
+            label="Bons afg. 30 dagen"
             value={statsLoading ? "—" : String(stats?.werkbonnen.maandBons ?? 0)}
-            sub={stats?.periode.maandLabel ?? ""}
+            sub="op boekdatum"
             icon={Wrench} color="blue"
           />
           <StatCard
-            label="Omzet deze week"
+            label="Omzet afg. 7 dagen"
             value={statsLoading ? "—" : formatCurrency(stats?.omzet.week ?? 0)}
             sub="journaal 8xxx credit"
             icon={TrendingUp} color="green"
           />
           <StatCard
-            label="Omzet deze maand"
+            label="Omzet afg. 30 dagen"
             value={statsLoading ? "—" : formatCurrency(stats?.omzet.maand ?? 0)}
-            sub={stats?.periode.maandLabel ?? ""}
+            sub="journaal 8xxx credit"
             icon={TrendingUp} color="blue"
           />
         </div>

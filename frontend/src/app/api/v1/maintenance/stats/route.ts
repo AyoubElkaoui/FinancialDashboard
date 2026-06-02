@@ -1,11 +1,14 @@
 /**
- * Maintenance KPI stats: werkbon-tellingen + omzet-periodes.
- * Bron: rm_werkbon (tellingen) + rm_journaal (omzet).
- * Expliciete datumfilter — geen all-time-optelling.
+ * Maintenance KPI stats: werkbon-tellingen + omzet.
+ * ROLLING vensters — niet "huidige kalenderweek" die leeg kan zijn
+ * als er dit jaar later dan Maandag is gestart.
+ * "Week" = afgelopen 7 dagen, "Maand" = afgelopen 30 dagen.
  */
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
+
+const safe = (v: string | null | undefined) => parseFloat(v ?? "0") || 0;
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -13,36 +16,35 @@ export async function GET(req: NextRequest) {
 
   const database = req.nextUrl.searchParams.get("database") ?? "MAINTENANCE";
 
-  const now         = new Date();
-  const startWeek   = new Date(now); startWeek.setDate(now.getDate() - now.getDay() + 1); startWeek.setHours(0,0,0,0);
-  const startMaand  = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startJaar   = new Date(now.getFullYear(), 0, 1);
-  const startMaandV = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const eindeMaandV = new Date(now.getFullYear(), now.getMonth(), 1);
+  const now    = new Date();
+  const dag7   = new Date(now); dag7.setDate(now.getDate() - 7);
+  const dag30  = new Date(now); dag30.setDate(now.getDate() - 30);
+  const startJaar = new Date(now.getFullYear(), 0, 1);
+  const dag30v = new Date(now); dag30v.setDate(now.getDate() - 60);  // vorige 30 dagen
 
-  // Werkbon-tellingen per status
+  // Werkbon-tellingen
   const [totaal, openstaand, uitgevoerd, weekBons, maandBons] = await Promise.all([
     db.rmWerkbon.count({ where: { database: database as never } }),
     db.rmWerkbon.count({ where: { database: database as never, status: { in: ["A","I"] } } }),
     db.rmWerkbon.count({ where: { database: database as never, status: { in: ["U","V"] } } }),
-    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: startWeek } } }),
-    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: startMaand } } }),
+    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: dag7 } } }),
+    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: dag30 } } }),
   ]);
 
-  // Omzet (rm_journaal credit 8xxx, expliciete periode)
+  // Omzet — rolling vensters
   type OmzetRow = { som: string | null };
   const [omzetWeek, omzetMaand, omzetJaar, omzetVorigeMaand] = await Promise.all([
     db.$queryRaw<OmzetRow[]>`
       SELECT SUM(bedrag)::text AS som FROM rm_journaal
       WHERE database::text = ${database} AND debet_credit='C' AND type_rubriek='W'
       AND rubriek_code LIKE '8%' AND rubriek_code NOT IN ('8030','8040','8045')
-      AND datum >= ${startWeek}
+      AND datum >= ${dag7}
     `,
     db.$queryRaw<OmzetRow[]>`
       SELECT SUM(bedrag)::text AS som FROM rm_journaal
       WHERE database::text = ${database} AND debet_credit='C' AND type_rubriek='W'
       AND rubriek_code LIKE '8%' AND rubriek_code NOT IN ('8030','8040','8045')
-      AND datum >= ${startMaand}
+      AND datum >= ${dag30}
     `,
     db.$queryRaw<OmzetRow[]>`
       SELECT SUM(bedrag)::text AS som FROM rm_journaal
@@ -54,14 +56,14 @@ export async function GET(req: NextRequest) {
       SELECT SUM(bedrag)::text AS som FROM rm_journaal
       WHERE database::text = ${database} AND debet_credit='C' AND type_rubriek='W'
       AND rubriek_code LIKE '8%' AND rubriek_code NOT IN ('8030','8040','8045')
-      AND datum >= ${startMaandV} AND datum < ${eindeMaandV}
+      AND datum >= ${dag30v} AND datum < ${dag30}
     `,
   ]);
 
-  // Top klanten (door bons deze maand)
+  // Top klanten (laatste 30 dagen)
   const topKlanten = await db.rmWerkbon.groupBy({
     by:      ["klant"],
-    where:   { database: database as never, datum: { gte: startMaand } },
+    where:   { database: database as never, datum: { gte: dag30 } },
     _count:  { bonnummer: true },
     orderBy: { _count: { bonnummer: "desc" } },
     take:    10,
@@ -69,17 +71,18 @@ export async function GET(req: NextRequest) {
 
   return Response.json({
     periode: {
-      week:       startWeek.toISOString().slice(0, 10),
-      maand:      startMaand.toISOString().slice(0, 10),
+      week7:      dag7.toISOString().slice(0, 10),
+      dag30:      dag30.toISOString().slice(0, 10),
       jaar:       startJaar.toISOString().slice(0, 10),
-      maandLabel: now.toLocaleDateString("nl-NL", { month: "long", year: "numeric" }),
+      weekLabel:  "Afgelopen 7 dagen",
+      maandLabel: "Afgelopen 30 dagen",
     },
     werkbonnen: { totaal, openstaand, uitgevoerd, weekBons, maandBons },
     omzet: {
-      week:        parseFloat(omzetWeek[0]?.som ?? "0") || 0,
-      maand:       parseFloat(omzetMaand[0]?.som ?? "0") || 0,
-      jaar:        parseFloat(omzetJaar[0]?.som ?? "0") || 0,
-      vorigeMaand: parseFloat(omzetVorigeMaand[0]?.som ?? "0") || 0,
+      week:        safe(omzetWeek[0]?.som),
+      maand:       safe(omzetMaand[0]?.som),
+      jaar:        safe(omzetJaar[0]?.som),
+      vorigeMaand: safe(omzetVorigeMaand[0]?.som),
     },
     topKlanten: topKlanten.map(k => ({
       klant: k.klant ?? "Onbekend",

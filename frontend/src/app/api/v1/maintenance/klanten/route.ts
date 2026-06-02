@@ -7,10 +7,11 @@ export async function GET(req: NextRequest) {
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
-  const now      = new Date();
-  const startW   = new Date(now); startW.setDate(now.getDate() - now.getDay() + 1); startW.setHours(0,0,0,0);
-  const startM   = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startY   = new Date(now.getFullYear(), 0, 1);
+  // Rolling vensters — geen kalenderweek/maand die leeg kan zijn
+  const now    = new Date();
+  const startW = new Date(now); startW.setDate(now.getDate() - 7);   // afgelopen 7 dagen
+  const startM = new Date(now); startM.setDate(now.getDate() - 30);  // afgelopen 30 dagen
+  const startY = new Date(now.getFullYear(), 0, 1);
 
   // Top-50 klanten gesorteerd op totaal aantal werkbonnen
   const klantGroups = await db.rmWerkbon.groupBy({
