@@ -175,45 +175,91 @@ function MaintenanceOmzetPage() {
 
 // ── Type A (project) ──────────────────────────────────────────────────────────
 
+interface PeriodeData {
+  periodeLabel: string;
+  totaalGefactureerd: number;
+  projecten: { PROJECTNUMMER: string; NAAM: string; KLANT: string; AANNEEMSOM: number; GEFACTUREERD_PERIODE: number }[];
+}
+
+const huidigJaar = new Date().getFullYear();
+const JAAR_OPTIES = [
+  { value: `jaar-${huidigJaar}`,   label: `${huidigJaar} YTD` },
+  { value: `jaar-${huidigJaar-1}`, label: String(huidigJaar - 1) },
+  { value: "alletijd",             label: "Alle jaren" },
+];
+
 function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
-  const { data, isLoading } = useQuery<{ data: ElmarProjectSummary[] }>({
-    queryKey: ["projecten", activeDb, "omzet"],
-    queryFn:  () => fetch(`/api/v1/projecten?database=${activeDb}&pageSize=100`).then(r => r.json()),
+  const [periodeMode, setPeriodeMode] = useState(`jaar-${huidigJaar}`);
+
+  const apiParams = (() => {
+    if (periodeMode === "alletijd") return `mode=alletijd`;
+    const jaar = parseInt(periodeMode.replace("jaar-", ""));
+    return `mode=jaar&jaar=${jaar}`;
+  })();
+
+  const { data, isLoading } = useQuery<PeriodeData>({
+    queryKey: ["omzet-periode", activeDb, periodeMode],
+    queryFn:  () => fetch(`/api/v1/omzet-periode?database=${activeDb}&${apiParams}`).then(r => r.json()),
   });
 
-  const projecten    = data?.data ?? [];
-  const totaalOmzet  = projecten.reduce((s, p) => s + p.GEFACTUREERD_TOTAAL, 0);
-  const totaalAannem = projecten.reduce((s, p) => s + p.TOTAAL_AANNEEMSOM, 0);
+  const projecten    = data?.projecten ?? [];
+  const totaalOmzet  = data?.totaalGefactureerd ?? 0;
+  const totaalAannem = projecten.reduce((s, p) => s + p.AANNEEMSOM, 0);
   const pctFact      = totaalAannem > 0 ? (totaalOmzet / totaalAannem) * 100 : 0;
+  const periodeLabel = data?.periodeLabel ?? "—";
 
   const chartData = [...projecten]
-    .sort((a, b) => b.GEFACTUREERD_TOTAAL - a.GEFACTUREERD_TOTAAL)
-    .map(p => ({ naam: p.PROJECTNUMMER, gefactureerd: p.GEFACTUREERD_TOTAAL, aanneemsom: p.TOTAAL_AANNEEMSOM }));
+    .sort((a, b) => b.GEFACTUREERD_PERIODE - a.GEFACTUREERD_PERIODE)
+    .slice(0, 30)
+    .map(p => ({ naam: p.PROJECTNUMMER, gefactureerd: p.GEFACTUREERD_PERIODE, aanneemsom: p.AANNEEMSOM }));
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Omzet</h1>
-        <p className="text-sm text-muted-foreground mt-1">Gefactureerde omzet per project — {activeDb}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Omzet</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gefactureerde omzet per project — {activeDb}
+            <span className="ml-2 inline-flex items-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-xs font-semibold">
+              {periodeLabel}
+            </span>
+          </p>
+        </div>
+        <Select value={periodeMode} onValueChange={(v) => { if (v) setPeriodeMode(v); }}>
+          <SelectTrigger className="h-9 w-44 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {JAAR_OPTIES.map(o => (
+              <SelectItem key={o.value} value={o.value} className="text-sm">{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-xs text-muted-foreground">Totaal gefactureerd</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-xs text-muted-foreground">Gefactureerd — {periodeLabel}</CardTitle></CardHeader>
           <CardContent><p className="text-3xl font-bold tabular-nums text-blue-600 dark:text-blue-400">{formatCurrency(totaalOmzet)}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle className="text-xs text-muted-foreground">Totale aanneemsom</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-xs text-muted-foreground">Aanneemsom (all-time)</CardTitle></CardHeader>
           <CardContent><p className="text-3xl font-bold tabular-nums">{formatCurrency(totaalAannem)}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle className="text-xs text-muted-foreground">% Gefactureerd</CardTitle></CardHeader>
-          <CardContent><p className={`text-3xl font-bold tabular-nums ${pctFact >= 80 ? "text-emerald-600 dark:text-emerald-400" : pctFact >= 50 ? "text-orange-600" : "text-red-600"}`}>{pctFact.toFixed(1)}%</p></CardContent>
+          <CardHeader><CardTitle className="text-xs text-muted-foreground">% Gefactureerd vs aanneemsom</CardTitle></CardHeader>
+          <CardContent><p className={`text-3xl font-bold tabular-nums ${pctFact >= 80 ? "text-emerald-600 dark:text-emerald-400" : pctFact >= 50 ? "text-orange-600" : "text-red-600"}`}>
+            {totaalAannem > 0 ? `${pctFact.toFixed(1)}%` : "n.v.t."}
+          </p></CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm">Gefactureerd vs Aanneemsom per project</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-sm">
+            Top 30 projecten op omzet — {periodeLabel}
+          </CardTitle>
+        </CardHeader>
         <CardContent>
           {isLoading ? <div className="h-72 animate-pulse bg-muted rounded" /> : (
             <ResponsiveContainer width="100%" height={320}>
@@ -223,8 +269,8 @@ function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
                 <YAxis tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} cursor={{ fill: 'transparent' }} />
                 <Legend />
-                <Bar dataKey="aanneemsom"   name="Aanneemsom"   fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="gefactureerd" name="Gefactureerd" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="aanneemsom"   name="Aanneemsom (all-time)" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="gefactureerd" name={`Gefactureerd ${periodeLabel}`} fill="#2563eb" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -232,7 +278,14 @@ function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm">Detail per project</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-sm">
+            Detail per project — {periodeLabel}
+            <span className="ml-2 text-xs text-muted-foreground font-normal">
+              ({projecten.length} projecten met omzet in deze periode)
+            </span>
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -241,20 +294,22 @@ function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
                   <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Project</th>
                   <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Naam</th>
                   <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Aanneemsom</th>
-                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Gefactureerd</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Gefactureerd {periodeLabel}</th>
                   <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">% Fact.</th>
                 </tr>
               </thead>
               <tbody>
-                {[...projecten].sort((a, b) => b.GEFACTUREERD_TOTAAL - a.GEFACTUREERD_TOTAAL).map((p, i) => {
-                  const pct = p.TOTAAL_AANNEEMSOM > 0 ? (p.GEFACTUREERD_TOTAAL / p.TOTAAL_AANNEEMSOM) * 100 : 0;
+                {projecten.map((p, i) => {
+                  const pct = p.AANNEEMSOM > 0 ? (p.GEFACTUREERD_PERIODE / p.AANNEEMSOM) * 100 : null;
                   return (
-                    <tr key={p.ID} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
+                    <tr key={p.PROJECTNUMMER} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
                       <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{p.PROJECTNUMMER}</td>
                       <td className="px-4 py-2.5 font-medium max-w-[200px] truncate">{p.NAAM}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>
-                      <td className={`px-4 py-2.5 text-right tabular-nums ${pct >= 80 ? "text-emerald-600 dark:text-emerald-400" : pct >= 50 ? "text-orange-600" : "text-red-600"}`}>{pct.toFixed(1)}%</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(p.AANNEEMSOM)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(p.GEFACTUREERD_PERIODE)}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums ${pct == null ? "text-muted-foreground" : pct >= 80 ? "text-emerald-600 dark:text-emerald-400" : pct >= 50 ? "text-orange-600" : "text-red-600"}`}>
+                        {pct != null ? `${pct.toFixed(1)}%` : "n.v.t."}
+                      </td>
                     </tr>
                   );
                 })}
