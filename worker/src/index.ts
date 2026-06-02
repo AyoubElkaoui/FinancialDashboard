@@ -8,8 +8,8 @@ const targetDb = process.argv[2]?.toUpperCase(); // bijv. "SERVICES"
 async function main() {
   console.log(`[${new Date().toISOString()}] Syntess sync-worker gestart`);
 
-  // Verbinding testen
-  await testFirebird();
+  // Verbinding testen (synchroon)
+  testFirebird();
   console.log(`[${new Date().toISOString()}] Firebird verbinding OK`);
 
   const admins = targetDb

@@ -1,4 +1,4 @@
-import { pgQuery, getPool } from "./postgres";
+import { pgQuery } from "./postgres";
 import {
   fetchProjecten, fetchRelaties, fetchOrderAgg,
   fetchJournaalAgg, fetchJournaalDetail,
@@ -10,7 +10,7 @@ import { ADMIN_CONFIG } from "./config";
 const log = (msg: string, ...args: unknown[]) =>
   console.log(`[${new Date().toISOString()}] ${msg}`, ...args);
 
-// ─── Upsert helpers ───────────────────────────────────────────────────────────
+// ─── Postgres upserts ─────────────────────────────────────────────────────────
 
 async function upsertSyncMeta(database: string, status: string, extra: {
   duurMs?: number; projectenCount?: number; fout?: string | null;
@@ -20,11 +20,11 @@ async function upsertSyncMeta(database: string, status: string, extra: {
     VALUES (gen_random_uuid(), $1, $2, NOW(), $3, $4, $5)
     ON CONFLICT (database)
     DO UPDATE SET
-      status = EXCLUDED.status,
-      gesynct_op = EXCLUDED.gesynct_op,
-      duur_ms = EXCLUDED.duur_ms,
+      status          = EXCLUDED.status,
+      gesynct_op      = EXCLUDED.gesynct_op,
+      duur_ms         = EXCLUDED.duur_ms,
       projecten_count = EXCLUDED.projecten_count,
-      fout = EXCLUDED.fout
+      fout            = EXCLUDED.fout
   `, [database, status, extra.duurMs ?? null, extra.projectenCount ?? null, extra.fout ?? null]);
 }
 
@@ -60,14 +60,18 @@ async function upsertProjectSummary(row: {
   ]);
 }
 
-async function replaceJournaalDetail(database: string, projectNrs: string[], rows: {
-  projectNr: string; datum: Date; rubriekCode: string; rubriekOmschr: string;
-  typeRubriek: string; debetCredit: string; bedrag: number; omschrijving: string | null;
-}[]): Promise<void> {
+async function replaceJournaalDetail(
+  database: string,
+  projectNrs: string[],
+  rows: {
+    projectNr: string; datum: string; rubriekCode: string; rubriekOmschr: string;
+    typeRubriek: string; debetCredit: string; bedrag: number; omschrijving: string | null;
+  }[]
+): Promise<void> {
   if (projectNrs.length === 0) return;
-  const placeholders = projectNrs.map((_, i) => `$${i + 2}`).join(",");
+  const ph = projectNrs.map((_, i) => `$${i + 2}`).join(",");
   await pgQuery(
-    `DELETE FROM rm_journaal WHERE database = $1 AND project_nr IN (${placeholders})`,
+    `DELETE FROM rm_journaal WHERE database = $1 AND project_nr IN (${ph})`,
     [database, ...projectNrs]
   );
   for (const r of rows) {
@@ -75,25 +79,33 @@ async function replaceJournaalDetail(database: string, projectNrs: string[], row
       INSERT INTO rm_journaal
         (id, database, project_nr, datum, rubriek_code, rubriek_omschr,
          type_rubriek, debet_credit, bedrag, omschrijving)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [database, r.projectNr, r.datum, r.rubriekCode, r.rubriekOmschr,
-        r.typeRubriek, r.debetCredit, r.bedrag, r.omschrijving]);
+      VALUES (gen_random_uuid(), $1, $2, $3::date, $4, $5, $6, $7, $8, $9)
+    `, [
+      database, r.projectNr, r.datum,
+      r.rubriekCode, r.rubriekOmschr, r.typeRubriek,
+      r.debetCredit, r.bedrag, r.omschrijving,
+    ]);
   }
 }
 
-async function replaceUrenDetail(database: string, projectNrs: string[], rows: {
-  projectNr: string; medewerker: string; datum: Date; aantal: number; omschrijving: string | null;
-}[]): Promise<void> {
+async function replaceUrenDetail(
+  database: string,
+  projectNrs: string[],
+  rows: {
+    projectNr: string; medewerker: string; datum: string;
+    aantal: number; omschrijving: string | null;
+  }[]
+): Promise<void> {
   if (projectNrs.length === 0) return;
-  const placeholders = projectNrs.map((_, i) => `$${i + 2}`).join(",");
+  const ph = projectNrs.map((_, i) => `$${i + 2}`).join(",");
   await pgQuery(
-    `DELETE FROM rm_uren WHERE database = $1 AND project_nr IN (${placeholders})`,
+    `DELETE FROM rm_uren WHERE database = $1 AND project_nr IN (${ph})`,
     [database, ...projectNrs]
   );
   for (const r of rows) {
     await pgQuery(`
       INSERT INTO rm_uren (id, database, project_nr, medewerker, datum, aantal, omschrijving)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4::date, $5, $6)
     `, [database, r.projectNr, r.medewerker, r.datum, r.aantal, r.omschrijving]);
   }
 }
@@ -108,15 +120,15 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
   try {
     await upsertSyncMeta(database, "running", {});
 
-    // 1. Rubrieken
+    // 1. Rubrieken (synchroon via isql)
     log("  Rubrieken laden...");
-    const rubrieken = await fetchRubrieken();
+    const rubrieken = fetchRubrieken();
     const maps = buildRubriekMaps(rubrieken);
     log(`  ${rubrieken.length} rubrieken geladen`);
 
     // 2. Projecten
     log("  Projecten laden...");
-    const projecten = await fetchProjecten(adminId);
+    const projecten = fetchProjecten(adminId);
     log(`  ${projecten.length} projecten gevonden`);
 
     if (projecten.length === 0) {
@@ -127,42 +139,41 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
 
     // 3. Klanten
     log("  Klanten laden...");
-    const relaties = await fetchRelaties(adminId);
+    const relaties = fetchRelaties(adminId);
     const klantMap = new Map(relaties.map(r => [r.GC_ID, r.GC_OMSCHRIJVING]));
 
     // 4. Aanneemsom
     log("  Aanneemsom laden...");
-    const orderRows = await fetchOrderAgg(adminId);
-    const aanneesomMap = new Map(orderRows.map(o => [o.WERK_GC_ID, round2(Number(o.AANNEEMSOM))]));
+    const orderRows = fetchOrderAgg(adminId);
+    const aanneesomMap = new Map(orderRows.map(o => [o.WERK_GC_ID, round2(o.AANNEEMSOM)]));
 
     // 5. Journaal aggregaten
     log("  Journaal aggregaten laden...");
-    const journaalAgg = await fetchJournaalAgg(adminId);
+    const journaalAgg = fetchJournaalAgg(adminId);
     const journaalMap = aggregeerJournaal(journaalAgg, maps);
     log(`  ${journaalAgg.length} journaalrijen geaggregeerd`);
 
     // 6. Uren aggregaten
     log("  Uren laden...");
-    const urenAgg = await fetchUrenAgg(adminId);
-    const urenMap = new Map(urenAgg.map(u => [u.WERK_GC_ID, round2(Number(u.UREN_TOTAAL))]));
+    const urenAgg = fetchUrenAgg(adminId);
+    const urenMap = new Map(urenAgg.map(u => [u.WERK_GC_ID, round2(u.UREN_TOTAAL)]));
 
-    // 7. Journaal detail (rm_journaal)
+    // 7. Details voor rm_journaal en rm_uren
     log("  Journaal details laden...");
-    const journaalDetail = await fetchJournaalDetail(adminId);
-    const projectNrs = projecten.map(p => p.GC_CODE);
-    // Werkid → projectnummer
-    const werkNrMap = new Map(projecten.map(p => [p.GC_ID, p.GC_CODE]));
+    const journaalDetail = fetchJournaalDetail(adminId);
 
-    // 8. Uren detail (rm_uren)
     log("  Uren details laden...");
-    const urenDetail = await fetchUrenDetail(adminId);
+    const urenDetail = fetchUrenDetail(adminId);
 
-    // 9. Schrijf project summaries
+    // WerkId → projectnummer mapping
+    const werkNrMap = new Map(projecten.map(p => [p.GC_ID, p.GC_CODE]));
+    const projectNrs = projecten.map(p => p.GC_CODE);
+
+    // 8. Project summaries schrijven naar Postgres
     log("  Project summaries schrijven...");
-    let geschreven = 0;
     for (const project of projecten) {
       const agg = journaalMap.get(project.GC_ID) ?? {
-        gefactureerd: 0, onbetaald: 0, kostenMat: 0, kostenArb: 0, kostenOvg: 0
+        gefactureerd: 0, onbetaald: 0, kostenMat: 0, kostenArb: 0, kostenOvg: 0,
       };
       await upsertProjectSummary({
         database,
@@ -179,36 +190,39 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
         kostenOverig:    round2(agg.kostenOvg),
         urenTotaal:      urenMap.get(project.GC_ID) ?? 0,
       });
-      geschreven++;
     }
-    log(`  ${geschreven} project summaries geschreven`);
+    log(`  ${projecten.length} project summaries geschreven`);
 
-    // 10. Journaal details
+    // 9. Journaal details
     log("  Journaal details schrijven...");
-    const journaalRows = journaalDetail.map(r => ({
-      projectNr:    werkNrMap.get(r.WERK_GC_ID) ?? "",
-      datum:        r.DATUM,
-      rubriekCode:  r.RUBRIEK_CODE,
-      rubriekOmschr: r.RUBRIEK_OMSCHR,
-      typeRubriek:  r.TYPE_RUBRIEK,
-      debetCredit:  r.DEBET_CREDIT,
-      bedrag:       round2(Number(r.BEDRAG)),
-      omschrijving: r.OMSCHRIJVING,
-    })).filter(r => r.projectNr !== "");
-    await replaceJournaalDetail(database, projectNrs, journaalRows);
-    log(`  ${journaalRows.length} journaalregels geschreven`);
+    const jRows = journaalDetail
+      .map(r => ({
+        projectNr:    werkNrMap.get(r.WERK_GC_ID) ?? "",
+        datum:        r.DATUM,
+        rubriekCode:  r.RUBRIEK_CODE,
+        rubriekOmschr: r.RUBRIEK_OMSCHR,
+        typeRubriek:  r.TYPE_RUBRIEK,
+        debetCredit:  r.DEBET_CREDIT,
+        bedrag:       round2(r.BEDRAG),
+        omschrijving: r.OMSCHRIJVING,
+      }))
+      .filter(r => r.projectNr !== "");
+    await replaceJournaalDetail(database, projectNrs, jRows);
+    log(`  ${jRows.length} journaalregels geschreven`);
 
-    // 11. Uren details
+    // 10. Uren details
     log("  Uren details schrijven...");
-    const urenRows = urenDetail.map(r => ({
-      projectNr:    werkNrMap.get(r.WERK_GC_ID) ?? "",
-      medewerker:   r.MEDEWERKER,
-      datum:        r.DATUM,
-      aantal:       round2(Number(r.AANTAL)),
-      omschrijving: r.OMSCHRIJVING,
-    })).filter(r => r.projectNr !== "");
-    await replaceUrenDetail(database, projectNrs, urenRows);
-    log(`  ${urenRows.length} uren-regels geschreven`);
+    const uRows = urenDetail
+      .map(r => ({
+        projectNr:   werkNrMap.get(r.WERK_GC_ID) ?? "",
+        medewerker:  r.MEDEWERKER,
+        datum:       r.DATUM,
+        aantal:      round2(r.AANTAL),
+        omschrijving: r.OMSCHRIJVING,
+      }))
+      .filter(r => r.projectNr !== "");
+    await replaceUrenDetail(database, projectNrs, uRows);
+    log(`  ${uRows.length} uren-regels geschreven`);
 
     const duurMs = Date.now() - start;
     await upsertSyncMeta(database, "ok", { duurMs, projectenCount: projecten.length });

@@ -1,130 +1,168 @@
+/**
+ * Alle Firebird-queries voor de sync-worker.
+ *
+ * Waarden komen als strings terug van isql; numerieke velden worden
+ * expliciet geconverteerd in elke fetchXxx-functie.
+ *
+ * SQL-parameters worden inline geïnjecteerd (adminId is altijd een
+ * hardcoded integer uit config, nooit user input → geen injectierisico).
+ */
+
 import { fbQuery } from "./firebird";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface FbRubriek {
-  GC_ID: number;
-  GC_CODE: string;
+  GC_ID:           number;
+  GC_CODE:         string;
   GC_OMSCHRIJVING: string;
-  TYPE_RUBRIEK: string; // W = winst/verlies, B = balans
+  TYPE_RUBRIEK:    string;   // W = winst/verlies, B = balans
 }
 
 export interface FbWerk {
-  GC_ID: number;
-  GC_CODE: string;            // Projectnummer, bv. "300-26-009"
-  GC_OMSCHRIJVING: string;    // Projectnaam
-  OPD_RELATIE_GC_ID: number | null;
+  GC_ID:              number;
+  GC_CODE:            string;
+  GC_OMSCHRIJVING:    string;
+  OPD_RELATIE_GC_ID:  number | null;
 }
 
 export interface FbRelatie {
-  GC_ID: number;
+  GC_ID:           number;
   GC_OMSCHRIJVING: string;
 }
 
 export interface FbJournaalAgg {
-  WERK_GC_ID: number;
+  WERK_GC_ID:    number;
   RUBRIEK_GC_ID: number;
-  DEBET_CREDIT: string;       // D of C
-  BEDRAG_SOM: number;
+  DEBET_CREDIT:  string;
+  BEDRAG_SOM:    number;
 }
 
 export interface FbJournaalDetail {
-  WERK_GC_ID: number;
-  DATUM: Date;
-  RUBRIEK_CODE: string;
+  WERK_GC_ID:    number;
+  DATUM:         string;    // 'YYYY-MM-DD' na CAST
+  RUBRIEK_CODE:  string;
   RUBRIEK_OMSCHR: string;
-  TYPE_RUBRIEK: string;
-  DEBET_CREDIT: string;
-  BEDRAG: number;
-  OMSCHRIJVING: string | null;
+  TYPE_RUBRIEK:  string;
+  DEBET_CREDIT:  string;
+  BEDRAG:        number;
+  OMSCHRIJVING:  string | null;
 }
 
 export interface FbOrderAgg {
-  WERK_GC_ID: number;
-  AANNEEMSOM: number;
-  METH_BEREKENING: string | null;  // Voor BTW-verificatie
+  WERK_GC_ID:     number;
+  AANNEEMSOM:     number;
   BTW_VERREKENING: string | null;
 }
 
 export interface FbUrenAgg {
-  WERK_GC_ID: number;
+  WERK_GC_ID:  number;
   UREN_TOTAAL: number;
 }
 
 export interface FbUrenDetail {
-  WERK_GC_ID: number;
-  MEDEWERKER: string;
-  DATUM: Date;
-  AANTAL: number;
+  WERK_GC_ID:  number;
+  MEDEWERKER:  string;
+  DATUM:       string;
+  AANTAL:      number;
   OMSCHRIJVING: string | null;
 }
 
-// ─── Query functies ───────────────────────────────────────────────────────────
+// ─── Hulpfuncties ──────────────────────────────────────────────────────────────
 
-/** Alle rubriek codes + types — voor categorisatie van kosten/omzet. */
-export function fetchRubrieken(): Promise<FbRubriek[]> {
-  return fbQuery<FbRubriek>(`
+const toInt  = (s: string) => parseInt(s || "0", 10);
+const toNum  = (s: string) => parseFloat(s.replace(",", ".") || "0");
+const toNull = (s: string): string | null => s.trim() === "" ? null : s.trim();
+
+// ─── Query functies ─────────────────────────────────────────────────────────────
+
+/** Alle rubriek-codes inclusief type (W/B). */
+export function fetchRubrieken(): FbRubriek[] {
+  const rows = fbQuery(`
     SELECT GC_ID, GC_CODE, GC_OMSCHRIJVING, TYPE_RUBRIEK
     FROM AT_RUBRIEK
     WHERE TYPE_RUBRIEK IN ('W', 'B')
       AND GC_CODE IS NOT NULL
-    ORDER BY GC_CODE
+    ORDER BY GC_CODE;
   `);
+  return rows.map(r => ({
+    GC_ID:           toInt(r.GC_ID),
+    GC_CODE:         r.GC_CODE.trim(),
+    GC_OMSCHRIJVING: r.GC_OMSCHRIJVING.trim(),
+    TYPE_RUBRIEK:    r.TYPE_RUBRIEK.trim(),
+  }));
 }
 
-/** Alle projecten voor een administratie. */
-export function fetchProjecten(adminId: number): Promise<FbWerk[]> {
-  return fbQuery<FbWerk>(`
+/** Alle projecten (AT_WERK) voor één administratie. */
+export function fetchProjecten(adminId: number): FbWerk[] {
+  const rows = fbQuery(`
     SELECT GC_ID, GC_CODE, GC_OMSCHRIJVING, OPD_RELATIE_GC_ID
     FROM AT_WERK
-    WHERE ADMINIS_GC_ID = ?
+    WHERE ADMINIS_GC_ID = ${adminId}
       AND GC_CODE IS NOT NULL
-    ORDER BY GC_CODE
-  `, [adminId]);
+    ORDER BY GC_CODE;
+  `);
+  return rows.map(r => ({
+    GC_ID:             toInt(r.GC_ID),
+    GC_CODE:           r.GC_CODE.trim(),
+    GC_OMSCHRIJVING:   r.GC_OMSCHRIJVING.trim(),
+    OPD_RELATIE_GC_ID: r.OPD_RELATIE_GC_ID ? toInt(r.OPD_RELATIE_GC_ID) : null,
+  }));
 }
 
-/** Klantnamen voor een administratie. */
-export function fetchRelaties(adminId: number): Promise<FbRelatie[]> {
-  return fbQuery<FbRelatie>(`
+/** Klantnamen die bij de projecten van deze administratie horen. */
+export function fetchRelaties(adminId: number): FbRelatie[] {
+  const rows = fbQuery(`
     SELECT DISTINCT r.GC_ID, r.GC_OMSCHRIJVING
     FROM AT_RELATIE r
     WHERE r.GC_ID IN (
       SELECT DISTINCT OPD_RELATIE_GC_ID
       FROM AT_WERK
-      WHERE ADMINIS_GC_ID = ?
+      WHERE ADMINIS_GC_ID = ${adminId}
         AND OPD_RELATIE_GC_ID IS NOT NULL
     )
-  `, [adminId]);
+    ORDER BY r.GC_ID;
+  `);
+  return rows.map(r => ({
+    GC_ID:           toInt(r.GC_ID),
+    GC_OMSCHRIJVING: r.GC_OMSCHRIJVING.trim(),
+  }));
 }
 
 /**
- * Aanneemsom per project (som van AT_ORDER.BEDRAG_TOTAAL).
- *
- * LETOP BTW: verifieer via validate.ts of BEDRAG_TOTAAL incl. of excl. BTW is
- * door METH_BEREKENING/BTW_VERREKENING te inspecteren vóór productiegebruik.
+ * Aanneemsom per project (som AT_ORDER.BEDRAG_TOTAAL, excl. BTW bevestigd).
+ * METH_BEREKENING en BTW_VERREKENING worden meegeleverd voor auditabiliteit.
  */
-export function fetchOrderAgg(adminId: number): Promise<FbOrderAgg[]> {
-  return fbQuery<FbOrderAgg>(`
+export function fetchOrderAgg(adminId: number): FbOrderAgg[] {
+  const rows = fbQuery(`
     SELECT
       o.WERK_GC_ID,
-      SUM(o.BEDRAG_TOTAAL) AS AANNEEMSOM,
-      MAX(o.METH_BEREKENING) AS METH_BEREKENING,
-      MAX(o.BTW_VERREKENING) AS BTW_VERREKENING
+      SUM(o.BEDRAG_TOTAAL)    AS AANNEEMSOM,
+      MAX(o.BTW_VERREKENING)  AS BTW_VERREKENING
     FROM AT_ORDER o
     WHERE o.WERK_GC_ID IN (
-      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ?
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND o.WERK_GC_ID IS NOT NULL
     GROUP BY o.WERK_GC_ID
-  `, [adminId]);
+    ORDER BY o.WERK_GC_ID;
+  `);
+  return rows.map(r => ({
+    WERK_GC_ID:      toInt(r.WERK_GC_ID),
+    AANNEEMSOM:      toNum(r.AANNEEMSOM),
+    BTW_VERREKENING: toNull(r.BTW_VERREKENING ?? ""),
+  }));
 }
 
 /**
- * Journaal-aggregaten per project × rubriek × D/C.
- * Worden in Node.js gecategoriseerd via de rubriek-map.
+ * Journaal-aggregaten per (project, rubriek, D/C).
+ *
+ * Geen code-filter hier — de categorisatie (omzet/kosten/debiteur)
+ * gebeurt in transform.ts via de rubriek-whitelist.
+ * WIP-mutaties (8030/8040/8045) worden gefilterd in buildRubriekMaps.
  */
-export function fetchJournaalAgg(adminId: number): Promise<FbJournaalAgg[]> {
-  return fbQuery<FbJournaalAgg>(`
+export function fetchJournaalAgg(adminId: number): FbJournaalAgg[] {
+  const rows = fbQuery(`
     SELECT
       j.WERK_GC_ID,
       j.RUBRIEK_GC_ID,
@@ -132,25 +170,29 @@ export function fetchJournaalAgg(adminId: number): Promise<FbJournaalAgg[]> {
       SUM(j.BEDRAG) AS BEDRAG_SOM
     FROM AT_JOURNAAL j
     WHERE j.WERK_GC_ID IN (
-      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ?
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND j.WERK_GC_ID IS NOT NULL
       AND j.WERK_GC_ID <> 0
     GROUP BY j.WERK_GC_ID, j.RUBRIEK_GC_ID, j.DEBET_CREDIT
-  `, [adminId]);
+    ORDER BY j.WERK_GC_ID;
+  `);
+  return rows.map(r => ({
+    WERK_GC_ID:    toInt(r.WERK_GC_ID),
+    RUBRIEK_GC_ID: toInt(r.RUBRIEK_GC_ID),
+    DEBET_CREDIT:  r.DEBET_CREDIT.trim(),
+    BEDRAG_SOM:    toNum(r.BEDRAG_SOM),
+  }));
 }
 
-/**
- * Journaaldetails voor rm_journaal (grootboek-pagina).
- * Alleen W- en B-rubrieken, meest recente jaar.
- */
-export function fetchJournaalDetail(adminId: number): Promise<FbJournaalDetail[]> {
-  return fbQuery<FbJournaalDetail>(`
+/** Journaaldetails voor rm_journaal (grootboek-pagina), laatste 365 dagen. */
+export function fetchJournaalDetail(adminId: number): FbJournaalDetail[] {
+  const rows = fbQuery(`
     SELECT
       j.WERK_GC_ID,
-      j.DATUM,
-      r.GC_CODE       AS RUBRIEK_CODE,
-      r.GC_OMSCHRIJVING AS RUBRIEK_OMSCHR,
+      CAST(j.DATUM AS VARCHAR(10))        AS DATUM,
+      r.GC_CODE                           AS RUBRIEK_CODE,
+      r.GC_OMSCHRIJVING                   AS RUBRIEK_OMSCHR,
       r.TYPE_RUBRIEK,
       j.DEBET_CREDIT,
       j.BEDRAG,
@@ -158,47 +200,69 @@ export function fetchJournaalDetail(adminId: number): Promise<FbJournaalDetail[]
     FROM AT_JOURNAAL j
     JOIN AT_RUBRIEK r ON r.GC_ID = j.RUBRIEK_GC_ID
     WHERE j.WERK_GC_ID IN (
-      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ?
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND j.WERK_GC_ID IS NOT NULL
       AND j.WERK_GC_ID <> 0
       AND r.TYPE_RUBRIEK IN ('W', 'B')
       AND j.DATUM >= CURRENT_DATE - 365
-    ORDER BY j.DATUM DESC
-  `, [adminId]);
+    ORDER BY j.DATUM DESC;
+  `);
+  return rows.map(r => ({
+    WERK_GC_ID:    toInt(r.WERK_GC_ID),
+    DATUM:         r.DATUM.trim(),
+    RUBRIEK_CODE:  r.RUBRIEK_CODE.trim(),
+    RUBRIEK_OMSCHR: r.RUBRIEK_OMSCHR.trim(),
+    TYPE_RUBRIEK:  r.TYPE_RUBRIEK.trim(),
+    DEBET_CREDIT:  r.DEBET_CREDIT.trim(),
+    BEDRAG:        toNum(r.BEDRAG),
+    OMSCHRIJVING:  toNull(r.OMSCHRIJVING ?? ""),
+  }));
 }
 
 /** Uren-totalen per project. */
-export function fetchUrenAgg(adminId: number): Promise<FbUrenAgg[]> {
-  return fbQuery<FbUrenAgg>(`
+export function fetchUrenAgg(adminId: number): FbUrenAgg[] {
+  const rows = fbQuery(`
     SELECT
       u.WERK_GC_ID,
       SUM(u.AANTAL) AS UREN_TOTAAL
     FROM AT_URENBREG u
     WHERE u.WERK_GC_ID IN (
-      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ?
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND u.WERK_GC_ID IS NOT NULL
     GROUP BY u.WERK_GC_ID
-  `, [adminId]);
+    ORDER BY u.WERK_GC_ID;
+  `);
+  return rows.map(r => ({
+    WERK_GC_ID:  toInt(r.WERK_GC_ID),
+    UREN_TOTAAL: toNum(r.UREN_TOTAAL),
+  }));
 }
 
-/** Uren-details per medewerker/dag voor rm_uren. */
-export function fetchUrenDetail(adminId: number): Promise<FbUrenDetail[]> {
-  return fbQuery<FbUrenDetail>(`
+/** Uren-details per medewerker/dag (rm_uren), laatste 365 dagen. */
+export function fetchUrenDetail(adminId: number): FbUrenDetail[] {
+  const rows = fbQuery(`
     SELECT
       u.WERK_GC_ID,
       COALESCE(m.GC_OMSCHRIJVING, 'Onbekend') AS MEDEWERKER,
-      u.DATUM,
+      CAST(u.DATUM AS VARCHAR(10))             AS DATUM,
       u.AANTAL,
       u.OMSCHRIJVING
     FROM AT_URENBREG u
     LEFT JOIN AT_MEDEW m ON m.GC_ID = u.MEDEW_GC_ID
     WHERE u.WERK_GC_ID IN (
-      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ?
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND u.WERK_GC_ID IS NOT NULL
       AND u.DATUM >= CURRENT_DATE - 365
-    ORDER BY u.DATUM DESC
-  `, [adminId]);
+    ORDER BY u.DATUM DESC;
+  `);
+  return rows.map(r => ({
+    WERK_GC_ID:  toInt(r.WERK_GC_ID),
+    MEDEWERKER:  r.MEDEWERKER.trim(),
+    DATUM:       r.DATUM.trim(),
+    AANTAL:      toNum(r.AANTAL),
+    OMSCHRIJVING: toNull(r.OMSCHRIJVING ?? ""),
+  }));
 }
