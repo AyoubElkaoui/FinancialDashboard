@@ -245,13 +245,81 @@ export function fetchUrenAgg(adminId: number): FbUrenAgg[] {
   }));
 }
 
+// ─── Werkbon queries (Maintenance) ────────────────────────────────────────────
+
+export interface FbWerkbon {
+  BONNUMMER:          string;
+  DATUM:              string;     // YYYY-MM-DD
+  OMSCHRIJVING:       string | null;
+  STATUS:             string;     // A, I, U, V
+  METH_IN_UITVOERING: string | null; // W, G
+  FASE:               string | null;
+  KLANT:              string | null;
+  EIGENAAR:           string | null;
+  WERK_CODE:          string | null;
+  IS_GEFACTUREERD:    string;     // "1" of "0"
+}
+
+/**
+ * Alle werkbonnen voor de Maintenance-DB.
+ * Joins: AT_DOCUMENT (datum/nummer/eigenaar), AT_RELATIE (klant),
+ * AT_WBADFASE (fase), AT_MEDEW (eigenaar naam), AT_WERK (contractcode).
+ *
+ * IS_GEFACTUREERD: true als minstens één KLNTBREG-regel met GC_BEDRAG > 0
+ * een GC_GEFACTUREERD (factuurverwijzing) heeft.
+ */
+export function fetchWerkbonnen(fbDatabase: string): FbWerkbon[] {
+  // Query 1: basis werkbon-data (zonder EXISTS subquery — te complex voor isql)
+  const rows = fbQuery(`
+    SELECT d.GC_CODE AS BONNUMMER,
+      CAST(CAST(d.GC_BOEKDATUM AS DATE) AS VARCHAR(10)) AS DATUM,
+      SUBSTRING(d.GC_OMSCHRIJVING FROM 1 FOR 120) AS OMSCHRIJVING,
+      TRIM(wb.STATUS) AS STATUS,
+      TRIM(wb.METH_IN_UITVOERING) AS METH_IN_UITVOERING,
+      SUBSTRING(COALESCE(f.GC_OMSCHRIJVING,'') FROM 1 FOR 80) AS FASE,
+      SUBSTRING(COALESCE(r.GC_OMSCHRIJVING,'') FROM 1 FOR 100) AS KLANT,
+      SUBSTRING(COALESCE(m.GC_OMSCHRIJVING,'') FROM 1 FOR 60) AS EIGENAAR,
+      COALESCE(w.GC_CODE,'') AS WERK_CODE
+    FROM AT_WERKBON wb
+    JOIN AT_DOCUMENT d ON d.GC_ID = wb.DOCUMENT_GC_ID
+    LEFT JOIN AT_RELATIE r ON r.GC_ID = wb.RELATIE_GC_ID
+    LEFT JOIN AT_MEDEW m ON m.GC_ID = d.EIG_MEDEW_GC_ID
+    LEFT JOIN AT_WBADFASE f ON f.GC_ID = wb.WBADFASE_GC_ID
+    LEFT JOIN AT_WERK w ON w.GC_ID = wb.WERK_GC_ID
+    ORDER BY d.GC_BOEKDATUM DESC;
+  `, fbDatabase);
+
+  // Query 2: welke bonnummers zijn gefactureerd? (via KLNTBREG → DOCUMENT.GC_CODE)
+  const factRows = fbQuery<{ BONNUMMER: string }>(
+    `SELECT DISTINCT d.GC_CODE AS BONNUMMER
+     FROM AT_KLNTBREG kb
+     JOIN AT_DOCUMENT d ON d.GC_ID = kb.WERKBON_GC_ID
+     WHERE kb.GC_GEFACTUREERD IS NOT NULL AND kb.GC_BEDRAG > 0;`,
+    fbDatabase
+  );
+  const gefactureerdSet = new Set(factRows.map(r => r.BONNUMMER?.trim() ?? ""));
+
+  return rows.map(r => ({
+    BONNUMMER:          r.BONNUMMER?.trim() ?? "",
+    DATUM:              r.DATUM?.trim() ?? "",
+    OMSCHRIJVING:       r.OMSCHRIJVING?.trim() || null,
+    STATUS:             r.STATUS?.trim() ?? "",
+    METH_IN_UITVOERING: r.METH_IN_UITVOERING?.trim() || null,
+    FASE:               r.FASE?.trim() || null,
+    KLANT:              r.KLANT?.trim() || null,
+    EIGENAAR:           r.EIGENAAR?.trim() || null,
+    WERK_CODE:          r.WERK_CODE?.trim() || null,
+    IS_GEFACTUREERD:    gefactureerdSet.has(r.BONNUMMER?.trim() ?? "") ? "1" : "0",
+  }));
+}
+
 /**
  * Totale company-level debiteuren: netto-saldo rubriek 1300.
  * AT_JOURNAAL.WERK_GC_ID = NULL voor debiteurenadministratie —
  * niet project-gebonden, dus geen WERK_GC_ID-filter.
  * Scoping via administratie-DB (Services = apart .FDB bestand).
  */
-export function fetchDebiteuren(): number {
+export function fetchDebiteuren(fbDatabase?: string): number {
   const rows = fbQuery<{ NETTO: string }>(`
     SELECT SUM(
       CASE j.DEBET_CREDIT
@@ -264,7 +332,7 @@ export function fetchDebiteuren(): number {
     JOIN AT_RUBRIEK r ON r.GC_ID = j.RUBRIEK_GC_ID
     WHERE r.GC_CODE = '1300'
       AND r.TYPE_RUBRIEK = 'B';
-  `);
+  `, fbDatabase);
   return Math.max(0, parseFloat(rows[0]?.NETTO ?? "0") || 0);
 }
 

@@ -3,7 +3,7 @@ import {
   fetchProjecten, fetchRelaties, fetchOrderAgg,
   fetchJournaalAgg, fetchJournaalDetail,
   fetchUrenAgg, fetchUrenDetail, fetchRubrieken,
-  fetchDebiteuren,
+  fetchDebiteuren, fetchWerkbonnen,
 } from "./queries";
 import { buildRubriekMaps, aggregeerJournaal, round2 } from "./transform";
 import { ADMIN_CONFIG } from "./config";
@@ -115,10 +115,101 @@ async function replaceUrenDetail(
   }
 }
 
+// ─── Werkbon upsert (Maintenance) ─────────────────────────────────────────────
+
+async function upsertWerkbon(database: string, wb: {
+  bonnummer: string; datum: string; omschrijving: string | null;
+  status: string; methInUitvoering: string | null; fase: string | null;
+  klant: string | null; eigenaar: string | null; werkCode: string | null;
+  isGefactureerd: boolean;
+}): Promise<void> {
+  await pgQuery(`
+    INSERT INTO rm_werkbon
+      (id, database, bonnummer, datum, omschrijving, status,
+       meth_in_uitvoering, fase, klant, eigenaar, werk_code,
+       is_gefactureerd, synct_op)
+    VALUES
+      (gen_random_uuid(), $1, $2, $3::date, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+    ON CONFLICT (database, bonnummer)
+    DO UPDATE SET
+      datum              = EXCLUDED.datum,
+      omschrijving       = EXCLUDED.omschrijving,
+      status             = EXCLUDED.status,
+      meth_in_uitvoering = EXCLUDED.meth_in_uitvoering,
+      fase               = EXCLUDED.fase,
+      klant              = EXCLUDED.klant,
+      eigenaar           = EXCLUDED.eigenaar,
+      werk_code          = EXCLUDED.werk_code,
+      is_gefactureerd    = EXCLUDED.is_gefactureerd,
+      synct_op           = NOW()
+    -- Handmatige velden worden BEWUST niet bijgewerkt (NOOIT overschrijven)
+  `, [
+    database, wb.bonnummer, wb.datum, wb.omschrijving ?? null,
+    wb.status, wb.methInUitvoering, wb.fase, wb.klant,
+    wb.eigenaar, wb.werkCode, wb.isGefactureerd,
+  ]);
+}
+
+// ─── Sync werkbonnen (Maintenance-type) ────────────────────────────────────────
+
+async function syncWerkbonnen(config: typeof ADMIN_CONFIG[0]): Promise<void> {
+  const { database, omschrijving, fbDatabase } = config;
+  const start = Date.now();
+  log(`▶ Start werkbon-sync: ${omschrijving} (database=${database})`);
+
+  try {
+    await upsertSyncMeta(database, "running", {});
+
+    log("  Werkbonnen laden uit Firebird...");
+    const werkbonnen = fetchWerkbonnen(fbDatabase);
+    log(`  ${werkbonnen.length} werkbonnen gevonden`);
+
+    log("  Werkbonnen schrijven naar Postgres...");
+    let geschreven = 0;
+    for (const wb of werkbonnen) {
+      if (!wb.BONNUMMER) continue;
+      await upsertWerkbon(database, {
+        bonnummer:        wb.BONNUMMER,
+        datum:            wb.DATUM,
+        omschrijving:     wb.OMSCHRIJVING,
+        status:           wb.STATUS,
+        methInUitvoering: wb.METH_IN_UITVOERING,
+        fase:             wb.FASE,
+        klant:            wb.KLANT,
+        eigenaar:         wb.EIGENAAR,
+        werkCode:         wb.WERK_CODE,
+        isGefactureerd:   wb.IS_GEFACTUREERD === "1",
+      });
+      geschreven++;
+    }
+
+    // Debiteuren voor Maintenance
+    log("  Debiteuren laden...");
+    const totaalDebiteuren = fetchDebiteuren(fbDatabase);
+    log(`  Debiteuren: €${totaalDebiteuren.toFixed(2)}`);
+
+    const duurMs = Date.now() - start;
+    await upsertSyncMeta(database, "ok", {
+      duurMs,
+      projectenCount: geschreven,
+      totaalDebiteuren,
+    });
+    log(`✓ Werkbon-sync voltooid: ${omschrijving} in ${(duurMs / 1000).toFixed(1)}s — ${geschreven} werkbonnen`);
+  } catch (err) {
+    const fout = err instanceof Error ? err.message : String(err);
+    await upsertSyncMeta(database, "error", { duurMs: Date.now() - start, fout });
+    log(`✗ Werkbon-sync mislukt: ${omschrijving} — ${fout}`);
+    throw err;
+  }
+}
+
 // ─── Hoofd-sync per administratie ────────────────────────────────────────────
 
 export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
-  const { adminId, database, omschrijving } = config;
+  // Werkbon-type krijgt eigen sync-functie
+  if (config.type === "werkbon") return syncWerkbonnen(config);
+
+  const { adminId, database, omschrijving, fbDatabase } = config;
   const start = Date.now();
   log(`▶ Start sync: ${omschrijving} (adminId=${adminId}, database=${database})`);
 

@@ -11,12 +11,13 @@ import { spawnSync } from "child_process";
 import { writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { FB_CONFIG, FB_ISQL_PATH, FB_LD_LIBRARY } from "./config";
+import { FB_BASE, FB_CONFIG, FB_ISQL_PATH, FB_LD_LIBRARY } from "./config";
 
 // ─── Connection string ─────────────────────────────────────────────────────────
 
-function connStr(): string {
-  return `${FB_CONFIG.host}/${FB_CONFIG.port}:${FB_CONFIG.database}`;
+function connStr(fbDatabase?: string): string {
+  const db = fbDatabase ?? FB_CONFIG.database;
+  return `${FB_BASE.host}/${FB_BASE.port}:${db}`;
 }
 
 // ─── List-mode parser ─────────────────────────────────────────────────────────
@@ -79,15 +80,14 @@ function parseIsqlList(output: string): Record<string, string>[] {
  * geen user input → geen SQL-injectierisico).
  */
 export function fbQuery<T extends Record<string, string> = Record<string, string>>(
-  sql: string
+  sql: string,
+  fbDatabase?: string   // optioneel DB-pad voor tweede Firebird database
 ): T[] {
   const tmpFile = join(
     tmpdir(),
     `fb_${Date.now()}_${Math.random().toString(36).slice(2)}.sql`
   );
 
-  // SET LIST ON: één kolom per lijn, handig voor brede tekstkolommen
-  // SET NAMES:   correct tekenset-gedrag (WIN1252 → Latin-1 output)
   const script = `SET NAMES WIN1252;\nSET LIST ON;\n${sql.trimEnd()}\n`;
   writeFileSync(tmpFile, script, "utf8");
 
@@ -95,11 +95,11 @@ export function fbQuery<T extends Record<string, string> = Record<string, string
     const proc = spawnSync(
       FB_ISQL_PATH,
       [
-        "-user",     FB_CONFIG.user,
-        "-password", FB_CONFIG.password,
-        "-q",        // Geen interactieve prompt
+        "-user",     FB_BASE.user,
+        "-password", FB_BASE.password,
+        "-q",
         "-input",    tmpFile,
-        connStr(),
+        connStr(fbDatabase),
       ],
       {
         encoding:  "buffer",
@@ -129,9 +129,9 @@ export function fbQuery<T extends Record<string, string> = Record<string, string
   }
 }
 
-/** Test de Firebird-verbinding. Gooit een fout bij mislukking. */
-export function testFirebird(): void {
-  const rows = fbQuery<{ ONE: string }>("SELECT 1 AS ONE FROM RDB$DATABASE;");
+/** Test de Firebird-verbinding voor een specifieke DB. Gooit een fout bij mislukking. */
+export function testFirebird(fbDatabase?: string): void {
+  const rows = fbQuery<{ ONE: string }>("SELECT 1 AS ONE FROM RDB$DATABASE;", fbDatabase);
   if (!rows[0] || rows[0].ONE !== "1") {
     throw new Error("Firebird health check mislukt");
   }

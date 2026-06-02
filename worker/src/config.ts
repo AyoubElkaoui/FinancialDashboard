@@ -7,31 +7,57 @@ function requireEnv(key: string): string {
   return v;
 }
 
-export const FB_CONFIG = {
+// Gedeelde Firebird-verbindingsparameters (host, port, user, password)
+export const FB_BASE = {
   host:     process.env.FB_HOST ?? "localhost",
   port:     Number(process.env.FB_PORT ?? 3050),
-  database: requireEnv("FB_DATABASE"),
   user:     process.env.FB_USER     ?? "SYSDBA",
   password: requireEnv("FB_PASSWORD"),
   charset:  process.env.FB_CHARSET  ?? "WIN1252",
 } as const;
 
-// Pad naar de isql binary (native Firebird client — werkt met FB3 wire-encryptie)
+// Achterwaarts compatibel: FB_CONFIG.database = Services DB (standaard)
+export const FB_CONFIG = {
+  ...FB_BASE,
+  database: process.env.FB_DATABASE ?? "",
+} as const;
+
+// Pad naar de isql binary (native Firebird client)
 export const FB_ISQL_PATH = process.env.FB_ISQL_PATH ?? "/opt/firebird/bin/isql";
-// Library-pad voor dynamische linker (libfbclient + libtommath symlink)
+// Library-pad voor dynamische linker
 export const FB_LD_LIBRARY = process.env.FB_LD_LIBRARY ?? "/opt/firebird/lib:/usr/lib64";
 
 export const DATABASE_URL = requireEnv("DATABASE_URL");
 
-// Mapping: Atrium ADMINIS_GC_ID → Dashboard Database enum
-// Pas aan naar de werkelijke waarden in jouw Atrium-installatie
+// Per-administratie configuratie: adminId, dashboard-enum, FDB-pad, rapportage-type
 export const ADMIN_CONFIG: Array<{
-  adminId: number;
-  database: string;       // moet overeenkomen met Prisma Database enum
+  adminId:      number;
+  database:     string;       // Prisma Database enum waarde
   omschrijving: string;
+  fbDatabase:   string;       // volledig Windows-pad naar de .FDB op de server
+  type:         "project" | "werkbon";
 }> = [
-  { adminId: 1,      database: "SERVICES",      omschrijving: "Elmar Services" },
-  { adminId: 100001, database: "INTERNATIONAL",  omschrijving: "Elmar International" },
+  {
+    adminId:      1,
+    database:     "SERVICES",
+    omschrijving: "Elmar Services",
+    fbDatabase:   process.env.FB_DATABASE      ?? "",
+    type:         "project",
+  },
+  {
+    adminId:      1,
+    database:     "MAINTENANCE",
+    omschrijving: "Elmar Maintenance",
+    fbDatabase:   process.env.FB_DATABASE_MAINT ?? "",
+    type:         "werkbon",
+  },
+  {
+    adminId:      100001,
+    database:     "INTERNATIONAL",
+    omschrijving: "Elmar International",
+    fbDatabase:   process.env.FB_DATABASE      ?? "",
+    type:         "project",
+  },
 ];
 
 export const DEFAULT_UREN_TARIEF = 7.5;

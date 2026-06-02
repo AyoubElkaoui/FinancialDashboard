@@ -112,6 +112,39 @@ model AuditLog {
   @@index([createdAt])
 }
 
+// ─── Werkbon read-model (Maintenance) ────────────────────────────────────────
+
+model RmWerkbon {
+  id               String   @id @default(cuid())
+  database         Database
+  bonnummer        String   @map("bonnummer")
+  datum            DateTime @db.Date
+  omschrijving     String?
+  status           String   // A=Aangemaakt, I=In uitvoering, U=Uitgevoerd, V=Voltoooid
+  methInUitvoering String?  @map("meth_in_uitvoering")  // W=Wacht uren, G=Gereed
+  fase             String?
+  klant            String?
+  eigenaar         String?
+  werkCode         String?  @map("werk_code")
+  isGefactureerd   Boolean  @default(false) @map("is_gefactureerd")
+  synctOp          DateTime @default(now()) @updatedAt @map("synct_op")
+
+  // Handmatige velden — sync overschrijft NOOIT
+  kostenHandm      Decimal? @db.Decimal(12, 2) @map("kosten_handm")
+  indirectHandm    Decimal? @db.Decimal(12, 2) @map("indirect_handm")
+  algKostenHandm   Decimal? @db.Decimal(12, 2) @map("alg_kosten_handm")
+  opbrengstenHandm Decimal? @db.Decimal(12, 2) @map("opbrengsten_handm")
+  bMargeHandm      Decimal? @db.Decimal(12, 2) @map("b_marge_handm")
+  volledigBetaald  Boolean? @map("volledig_betaald")
+  notities         String?
+
+  @@unique([database, bonnummer])
+  @@index([database, status])
+  @@index([database, datum])
+  @@index([database, klant])
+  @@map("rm_werkbon")
+}
+
 // ─── Read-model: gesynchroniseerde Firebird-data ──────────────────────────────
 
 model RmProjectSummary {
