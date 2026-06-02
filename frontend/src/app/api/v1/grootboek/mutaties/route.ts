@@ -1,27 +1,53 @@
 import type { NextRequest } from "next/server";
-import { getDbGrootboekMutaties, getDbGrootboekRubrieken } from "@/lib/mock/elmar-data";
+import { db } from "@/lib/db";
+import { getSession } from "@/lib/session";
+import type { Database, Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
-  const s        = request.nextUrl.searchParams;
-  const database = s.get("database") ?? "SERVICES";
-  const page     = Number(s.get("page")     ?? 1);
-  const pageSize = Number(s.get("pageSize") ?? 50);
-  const rubriekId = s.get("rubriekId") ? Number(s.get("rubriekId")) : undefined;
-  const dateFrom  = s.get("dateFrom") ?? undefined;
-  const dateTo    = s.get("dateTo")   ?? undefined;
+  const session = await getSession();
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
-  let items = getDbGrootboekMutaties(database);
+  const s         = request.nextUrl.searchParams;
+  const database  = s.get("database") ?? "SERVICES";
+  const page      = Math.max(1, Number(s.get("page") ?? 1));
+  const pageSize  = Math.min(500, Math.max(1, Number(s.get("pageSize") ?? 50)));
+  const rubriek   = s.get("rubriekCode") ?? "";   // filter op rubriekCode
+  const dateFrom  = s.get("dateFrom");
+  const dateTo    = s.get("dateTo");
+  const search    = s.get("search")?.toLowerCase() ?? "";
 
-  if (rubriekId) {
-    const rubrieken = getDbGrootboekRubrieken(database);
-    const rubriek   = rubrieken.find((r) => r.ID === rubriekId);
-    if (rubriek) items = items.filter((m) => m.REKENINGNUMMER === rubriek.REKENINGNUMMER);
+  const where: Prisma.RmJournaalWhereInput = { database: database as Database };
+
+  if (rubriek)   where.rubriekCode = rubriek;
+  if (dateFrom)  where.datum = { gte: new Date(dateFrom) };
+  if (dateTo)    where.datum = { ...(where.datum as Prisma.DateTimeFilter ?? {}), lte: new Date(dateTo + "T23:59:59") };
+
+  if (search) {
+    where.OR = [
+      { projectNr:     { contains: search, mode: "insensitive" } },
+      { rubriekCode:   { contains: search, mode: "insensitive" } },
+      { rubriekOmschr: { contains: search, mode: "insensitive" } },
+      { omschrijving:  { contains: search, mode: "insensitive" } },
+    ];
   }
-  if (dateFrom) items = items.filter((m) => m.DATUM >= dateFrom);
-  if (dateTo)   items = items.filter((m) => m.DATUM <= dateTo);
 
-  const total      = items.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const data       = items.slice((page - 1) * pageSize, page * pageSize);
-  return Response.json({ data, total, page, pageSize, totalPages });
+  const [rows, total] = await Promise.all([
+    db.rmJournaal.findMany({ where, orderBy: { datum: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    db.rmJournaal.count({ where }),
+  ]);
+
+  const toDate = (d: unknown) => d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+
+  const data = rows.map(r => ({
+    DATUM:         toDate(r.datum),
+    REKENINGNUMMER: r.rubriekCode,
+    RUBRIEK:       r.rubriekOmschr,
+    OMSCHRIJVING:  r.omschrijving ?? "",
+    PROJECT:       r.projectNr,
+    SOORT:         r.typeRubriek === "W" ? "W&V" : "Balans",
+    DEBET:         r.debetCredit === "D" ? Number(r.bedrag) : 0,
+    CREDIT:        r.debetCredit === "C" ? Number(r.bedrag) : 0,
+  }));
+
+  return Response.json({ data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
 }

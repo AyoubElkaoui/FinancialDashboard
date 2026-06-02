@@ -14,19 +14,19 @@ const OVERHEAD_EXCLUSIONS = new Set([
 ]);
 
 /**
- * Enkelvoudige kostendrager-codes (exacte match, niet startsWith).
+ * Enkelvoudige en bevestigde kostendrager-codes (exacte match, niet startsWith).
  * Code '5' ≠ '5569': exact één karakter.
+ * '-' = verkeerd gerubriceerde inkoop (Daikin, Carrier, materiaal) — bevestigd projectkost.
+ * '5569' = reiskosten — bevestigd directe projectkost.
  */
-const SINGLE_DIGIT_COST_CODES = new Set([
-  "4",    // B-Bouwkundig
-  "5",    // (exact code 5 — bevestig nog)
-  "6",
+const EXACT_COST_CODES = new Set([
+  "4",     // B-Bouwkundig
+  "5",     // W-Installatieswerktuig
+  "6",     // E-Installaties Electrotechnisch
   "9",
-  // INT-varianten
-  "INT4",
-  "INT5",
-  "INT6",
-  "INT9",
+  "INT4", "INT5", "INT6", "INT9",
+  "-",     // Verkeerd gerubriceerde inkoop (Daikin, Carrier, materiaal)
+  "5569",  // Reiskosten — directe projectkost
 ]);
 
 /**
@@ -49,7 +49,7 @@ const WIP_OMZET_EXCLUSIONS = new Set([
 function isKostenRubriek(code: string): boolean {
   if (OVERHEAD_EXCLUSIONS.has(code)) return false;
   if (code.startsWith("7") || code.startsWith("INT7")) return true;
-  if (SINGLE_DIGIT_COST_CODES.has(code)) return true;
+  if (EXACT_COST_CODES.has(code)) return true;
   return false;
 }
 
@@ -97,7 +97,7 @@ export function buildRubriekMaps(rubrieken: FbRubriek[]): RubriekMaps {
       } else if (code > "7008" && code <= "7055") {
         kostArbIds.add(r.GC_ID);     // Directe uren / arbeid
       } else {
-        kostOvgIds.add(r.GC_ID);     // Overige whitelist (7055+, INT7, 4/5/6/9)
+        kostOvgIds.add(r.GC_ID);     // Overige: 7055+, INT7, 4/5/6/9, -, 5569
       }
     }
   }

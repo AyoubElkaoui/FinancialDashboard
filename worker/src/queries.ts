@@ -245,6 +245,29 @@ export function fetchUrenAgg(adminId: number): FbUrenAgg[] {
   }));
 }
 
+/**
+ * Totale company-level debiteuren: netto-saldo rubriek 1300.
+ * AT_JOURNAAL.WERK_GC_ID = NULL voor debiteurenadministratie —
+ * niet project-gebonden, dus geen WERK_GC_ID-filter.
+ * Scoping via administratie-DB (Services = apart .FDB bestand).
+ */
+export function fetchDebiteuren(): number {
+  const rows = fbQuery<{ NETTO: string }>(`
+    SELECT SUM(
+      CASE j.DEBET_CREDIT
+        WHEN 'D' THEN  j.BEDRAG
+        WHEN 'C' THEN -j.BEDRAG
+        ELSE 0
+      END
+    ) AS NETTO
+    FROM AT_JOURNAAL j
+    JOIN AT_RUBRIEK r ON r.GC_ID = j.RUBRIEK_GC_ID
+    WHERE r.GC_CODE = '1300'
+      AND r.TYPE_RUBRIEK = 'B';
+  `);
+  return Math.max(0, parseFloat(rows[0]?.NETTO ?? "0") || 0);
+}
+
 /** Uren-details per medewerker/dag (rm_uren), laatste 365 dagen. */
 export function fetchUrenDetail(adminId: number): FbUrenDetail[] {
   const rows = fbQuery(`

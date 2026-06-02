@@ -110,7 +110,9 @@ function TableView({ projecten, onNavigate }: { projecten: ElmarProjectSummary[]
                 <td className="px-3 py-2.5 text-muted-foreground max-w-[180px] truncate">{p.KLANT}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${betaaldCls(p.PCT_BETAALD)}`}>{formatPercentage(p.PCT_BETAALD)}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums ${p.PCT_BETAALD != null ? betaaldCls(p.PCT_BETAALD) : "text-muted-foreground"}`}>
+                  {p.PCT_BETAALD != null ? formatPercentage(p.PCT_BETAALD) : "n.v.t."}
+                </td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatCurrency(p.TOTALE_KOSTEN)}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(p.BRUTOMARGE)}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums ${margeCls(p.MARGE_PCT)}`}>{formatPercentage(p.MARGE_PCT)}</td>

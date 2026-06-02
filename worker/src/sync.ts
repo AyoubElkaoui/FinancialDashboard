@@ -3,6 +3,7 @@ import {
   fetchProjecten, fetchRelaties, fetchOrderAgg,
   fetchJournaalAgg, fetchJournaalDetail,
   fetchUrenAgg, fetchUrenDetail, fetchRubrieken,
+  fetchDebiteuren,
 } from "./queries";
 import { buildRubriekMaps, aggregeerJournaal, round2 } from "./transform";
 import { ADMIN_CONFIG } from "./config";
@@ -14,18 +15,22 @@ const log = (msg: string, ...args: unknown[]) =>
 
 async function upsertSyncMeta(database: string, status: string, extra: {
   duurMs?: number; projectenCount?: number; fout?: string | null;
+  totaalDebiteuren?: number | null;
 }): Promise<void> {
   await pgQuery(`
-    INSERT INTO rm_sync_meta (id, database, status, gesynct_op, duur_ms, projecten_count, fout)
-    VALUES (gen_random_uuid(), $1, $2, NOW(), $3, $4, $5)
+    INSERT INTO rm_sync_meta
+      (id, database, status, gesynct_op, duur_ms, projecten_count, totaal_debiteuren, fout)
+    VALUES (gen_random_uuid(), $1, $2, NOW(), $3, $4, $5, $6)
     ON CONFLICT (database)
     DO UPDATE SET
-      status          = EXCLUDED.status,
-      gesynct_op      = EXCLUDED.gesynct_op,
-      duur_ms         = EXCLUDED.duur_ms,
-      projecten_count = EXCLUDED.projecten_count,
-      fout            = EXCLUDED.fout
-  `, [database, status, extra.duurMs ?? null, extra.projectenCount ?? null, extra.fout ?? null]);
+      status             = EXCLUDED.status,
+      gesynct_op         = EXCLUDED.gesynct_op,
+      duur_ms            = EXCLUDED.duur_ms,
+      projecten_count    = EXCLUDED.projecten_count,
+      totaal_debiteuren  = EXCLUDED.totaal_debiteuren,
+      fout               = EXCLUDED.fout
+  `, [database, status, extra.duurMs ?? null, extra.projectenCount ?? null,
+      extra.totaalDebiteuren ?? null, extra.fout ?? null]);
 }
 
 async function upsertProjectSummary(row: {
@@ -158,7 +163,12 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
     const urenAgg = fetchUrenAgg(adminId);
     const urenMap = new Map(urenAgg.map(u => [u.WERK_GC_ID, round2(u.UREN_TOTAAL)]));
 
-    // 7. Details voor rm_journaal en rm_uren
+    // 7. Company-level debiteuren (1300-saldo, niet project-gekoppeld)
+    log("  Debiteuren laden...");
+    const totaalDebiteuren = fetchDebiteuren();
+    log(`  Debiteuren netto-saldo: €${totaalDebiteuren.toFixed(2)}`);
+
+    // 8. Details voor rm_journaal en rm_uren
     log("  Journaal details laden...");
     const journaalDetail = fetchJournaalDetail(adminId);
 
@@ -225,7 +235,7 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
     log(`  ${uRows.length} uren-regels geschreven`);
 
     const duurMs = Date.now() - start;
-    await upsertSyncMeta(database, "ok", { duurMs, projectenCount: projecten.length });
+    await upsertSyncMeta(database, "ok", { duurMs, projectenCount: projecten.length, totaalDebiteuren });
     log(`✓ Sync voltooid: ${omschrijving} in ${(duurMs / 1000).toFixed(1)}s — ${projecten.length} projecten`);
 
   } catch (err) {

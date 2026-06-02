@@ -165,13 +165,14 @@ model RmUren {
 }
 
 model RmSyncMeta {
-  id             String   @id @default(cuid())
-  database       Database @unique
-  status         String   @default("pending")
-  gesynctOp      DateTime @default(now()) @map("gesynct_op")
-  duurMs         Int?     @map("duur_ms")
-  projectenCount Int?     @map("projecten_count")
-  fout           String?
+  id                String   @id @default(cuid())
+  database          Database @unique
+  status            String   @default("pending")
+  gesynctOp         DateTime @default(now()) @map("gesynct_op")
+  duurMs            Int?     @map("duur_ms")
+  projectenCount    Int?     @map("projecten_count")
+  totaalDebiteuren  Decimal? @db.Decimal(15, 2) @map("totaal_debiteuren")
+  fout              String?
 
   @@map("rm_sync_meta")
 }

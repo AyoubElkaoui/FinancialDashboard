@@ -22,8 +22,9 @@ function applyParams(row: {
   const kostenAlgemeen = kostenSyntess * (algKostenPct / 100);
   const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
   const brutomarge     = gefactureerd - totaleKosten;
-  const margePct       = gefactureerd > 0 ? (brutomarge / gefactureerd) * 100 : 0;
-  const pctBetaald     = aanneemsom   > 0 ? (gefactureerd / aanneemsom)  * 100 : 0;
+  const margePct   = gefactureerd > 0 ? (brutomarge / gefactureerd) * 100 : 0;
+  // aanneemsom = 0 → pctBetaald = null (frontend toont "n.v.t.")
+  const pctBetaald = aanneemsom  > 0 ? (gefactureerd / aanneemsom)  * 100 : null;
   return { aanneemsom, gefactureerd, totaleKosten, brutomarge, margePct, pctBetaald };
 }
 
@@ -38,8 +39,9 @@ export async function GET(request: NextRequest) {
   const pageSize = Math.min(5000, Math.max(1, Number(s.get("pageSize") ?? 100)));
 
   // Controleer of read-model data heeft voor deze database
+  // Systeemprojecten uitsluiten: negatieve aanneemsom = migratiecorrecties
   const rmCount = await db.rmProjectSummary.count({
-    where: { database: database as Database },
+    where: { database: database as Database, aanneemsom: { gte: 0 } },
   }).catch(() => 0);
 
   if (rmCount === 0) {
@@ -63,7 +65,8 @@ export async function GET(request: NextRequest) {
 
   // Lees uit read-model
   const where = {
-    database: database as Database,
+    database:    database as Database,
+    aanneemsom:  { gte: 0 },   // systeemprojecten (neg aanneemsom) uitsluiten
     ...(search ? {
       OR: [
         { naam:      { contains: search, mode: "insensitive" as const } },
