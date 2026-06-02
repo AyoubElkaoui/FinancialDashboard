@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import type { Database, Prisma } from "@prisma/client";
+import type { Database } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -18,9 +18,10 @@ export async function GET(request: NextRequest) {
 
   const where: Prisma.RmJournaalWhereInput = { database: database as Database };
 
-  if (rubriek)   where.rubriekCode = rubriek;
-  if (dateFrom)  where.datum = { gte: new Date(dateFrom) };
-  if (dateTo)    where.datum = { ...(where.datum as Prisma.DateTimeFilter ?? {}), lte: new Date(dateTo + "T23:59:59") };
+  if (rubriek)                  where.rubriekCode = rubriek;
+  if (dateFrom && dateTo)       where.datum = { gte: new Date(dateFrom), lte: new Date(dateTo + "T23:59:59") };
+  else if (dateFrom)            where.datum = { gte: new Date(dateFrom) };
+  else if (dateTo)              where.datum = { lte: new Date(dateTo + "T23:59:59") };
 
   if (search) {
     where.OR = [
