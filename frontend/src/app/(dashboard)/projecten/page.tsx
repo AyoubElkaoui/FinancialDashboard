@@ -81,54 +81,54 @@ function Th({ children, right }: { children: React.ReactNode; right?: boolean })
   );
 }
 
-function TableView({ projecten, activeDb, onNavigate }: { projecten: ElmarProjectSummary[]; activeDb: string; onNavigate: (p: ElmarProjectSummary) => void }) {
+function TableView({ projecten, onNavigate }: { projecten: ElmarProjectSummary[]; activeDb: string; onNavigate: (p: ElmarProjectSummary) => void }) {
+  const COLS = 9;
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[860px]">
           <thead className="bg-muted/40">
             <tr>
-              <Th>Projectnummer</Th>
-              <Th>Naam</Th>
+              <Th>Nr.</Th>
+              <Th>Projectnaam</Th>
               <Th>Klant</Th>
-              <Th>Projectleider</Th>
               <Th right>Aanneemsom</Th>
               <Th right>Gefactureerd</Th>
+              <Th right>% Betaald</Th>
               <Th right>Totale kosten</Th>
               <Th right>Brutomarge</Th>
               <Th right>Marge %</Th>
-              <Th right>% Betaald</Th>
-              <Th>Status</Th>
             </tr>
           </thead>
           <tbody>
             {projecten.length === 0 ? (
-              <tr><td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">Geen projecten gevonden</td></tr>
+              <tr><td colSpan={COLS} className="px-4 py-12 text-center text-muted-foreground">Geen projecten gevonden</td></tr>
             ) : projecten.map((p) => (
               <tr key={p.ID} className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors" onClick={() => onNavigate(p)}>
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{p.PROJECTNUMMER}</td>
-                <td className="px-4 py-3 font-medium max-w-[220px] truncate">{p.NAAM}</td>
-                <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate">{p.KLANT}</td>
-                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{p.PROJECTLEIDER}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(p.TOTALE_KOSTEN)}</td>
-                <td className={`px-4 py-3 text-right tabular-nums ${p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(p.BRUTOMARGE)}</td>
-                <td className={`px-4 py-3 text-right tabular-nums ${margeCls(p.MARGE_PCT)}`}>{formatPercentage(p.MARGE_PCT)}</td>
-                <td className={`px-4 py-3 text-right tabular-nums ${betaaldCls(p.PCT_BETAALD)}`}>{formatPercentage(p.PCT_BETAALD)}</td>
-                <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={p.STATUS} /></td>
+                <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{p.PROJECTNUMMER}</td>
+                <td className="px-3 py-2.5 font-medium">{p.NAAM}</td>
+                <td className="px-3 py-2.5 text-muted-foreground max-w-[180px] truncate">{p.KLANT}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums ${betaaldCls(p.PCT_BETAALD)}`}>{formatPercentage(p.PCT_BETAALD)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatCurrency(p.TOTALE_KOSTEN)}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(p.BRUTOMARGE)}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums ${margeCls(p.MARGE_PCT)}`}>{formatPercentage(p.MARGE_PCT)}</td>
               </tr>
             ))}
           </tbody>
           {projecten.length > 1 && (
             <tfoot className="border-t bg-muted/30 font-semibold text-sm">
               <tr>
-                <td colSpan={4} className="px-4 py-2.5 text-xs uppercase tracking-wider text-muted-foreground">Totaal ({projecten.length} projecten)</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTAAL_AANNEEMSOM,0))}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.GEFACTUREERD_TOTAAL,0))}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTALE_KOSTEN,0))}</td>
-                <td className={`px-4 py-2.5 text-right tabular-nums ${projecten.reduce((s,p)=>s+p.BRUTOMARGE,0)>=0?"text-emerald-600 dark:text-emerald-400":"text-red-600"}`}>{formatCurrency(projecten.reduce((s,p)=>s+p.BRUTOMARGE,0))}</td>
-                <td colSpan={3} />
+                <td colSpan={3} className="px-3 py-2.5 text-xs uppercase tracking-wider text-muted-foreground">
+                  Totaal ({projecten.length} projecten)
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTAAL_AANNEEMSOM,0))}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(projecten.reduce((s,p)=>s+p.GEFACTUREERD_TOTAAL,0))}</td>
+                <td />
+                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatCurrency(projecten.reduce((s,p)=>s+p.TOTALE_KOSTEN,0))}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums ${projecten.reduce((s,p)=>s+p.BRUTOMARGE,0)>=0?"text-emerald-600 dark:text-emerald-400":"text-red-600"}`}>{formatCurrency(projecten.reduce((s,p)=>s+p.BRUTOMARGE,0))}</td>
+                <td />
               </tr>
             </tfoot>
           )}
@@ -311,12 +311,15 @@ function TableSkeleton({ cols }: { cols: number }) {
 
 // ─── Inner component ──────────────────────────────────────────────────────────
 
+const PAGE_SIZE_OPTIONS = [50, 100, 250, 500, 2500] as const;
+
 function ProjectenInner() {
   const router  = useRouter();
-  const [activeDb, setActiveDb] = useState("SERVICES");
-  const [search,   setSearch]   = useState("");
-  const [mounted,  setMounted]  = useState(false);
-  const [view,     setView]     = useState<View>("table");
+  const [activeDb,  setActiveDb]  = useState("SERVICES");
+  const [search,    setSearch]    = useState("");
+  const [mounted,   setMounted]   = useState(false);
+  const [view,      setView]      = useState<View>("table");
+  const [pageSize,  setPageSize]  = useState<number>(250);
 
   useEffect(() => {
     try {
@@ -324,6 +327,8 @@ function ProjectenInner() {
       if (stored) setActiveDb(stored);
       const sv = localStorage.getItem("elmar_projecten_view") as View | null;
       if (sv) setView(sv);
+      const ps = localStorage.getItem("elmar_projecten_pagesize");
+      if (ps) setPageSize(Number(ps));
     } catch {}
     setMounted(true);
 
@@ -336,9 +341,9 @@ function ProjectenInner() {
   }, []);
 
   const { data, isLoading } = useQuery<{ data: ElmarProjectSummary[]; total: number }>({
-    queryKey: ["elmar-projecten", activeDb, search],
+    queryKey: ["elmar-projecten", activeDb, search, pageSize],
     queryFn: () => {
-      const params = new URLSearchParams({ database: activeDb });
+      const params = new URLSearchParams({ database: activeDb, pageSize: String(pageSize) });
       if (search) params.set("search", search);
       return fetch(`/api/v1/projecten?${params}`).then(r => r.json());
     },
@@ -346,10 +351,16 @@ function ProjectenInner() {
   });
 
   const projecten = data?.data ?? [];
+  const total     = data?.total ?? 0;
 
   const switchView = (v: View) => {
     setView(v);
     try { localStorage.setItem("elmar_projecten_view", v); } catch {}
+  };
+
+  const changePageSize = (ps: number) => {
+    setPageSize(ps);
+    try { localStorage.setItem("elmar_projecten_pagesize", String(ps)); } catch {}
   };
 
   const navigate = (p: ElmarProjectSummary) => router.push(`/projecten/${p.ID}?database=${p.DATABASE}`);
@@ -363,6 +374,11 @@ function ProjectenInner() {
           <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${DB_COLORS[activeDb]?.badge ?? ""}`}>
             {DB_NAMES[activeDb] ?? activeDb}
           </span>
+          {!isLoading && total > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {projecten.length < total ? `${projecten.length} van ${total}` : `${total} projecten`}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -373,6 +389,17 @@ function ProjectenInner() {
             onChange={e => setSearch(e.target.value)}
             className="h-9 w-64 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
+
+          {/* Page size selector */}
+          <div className="flex items-center rounded-md border overflow-hidden text-xs">
+            {PAGE_SIZE_OPTIONS.map(ps => (
+              <button key={ps} onClick={() => changePageSize(ps)}
+                className={`h-9 px-3 transition-colors border-l first:border-l-0 ${pageSize === ps ? "bg-blue-600 text-white font-semibold" : "bg-background text-muted-foreground hover:bg-muted"}`}>
+                {ps === 2500 ? "Alles" : ps}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center rounded-md border overflow-hidden text-sm">
             {([
               { v: "table",       icon: Table2,      label: "Tabel"       },

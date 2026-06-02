@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   const database = s.get("database") ?? "SERVICES";
   const search   = s.get("search")?.toLowerCase() ?? "";
   const page     = Math.max(1, Number(s.get("page") ?? 1));
-  const pageSize = Math.min(250, Math.max(1, Number(s.get("pageSize") ?? 50)));
+  const pageSize = Math.min(5000, Math.max(1, Number(s.get("pageSize") ?? 100)));
 
   // Controleer of read-model data heeft voor deze database
   const rmCount = await db.rmProjectSummary.count({
