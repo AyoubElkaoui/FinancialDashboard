@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import * as argon2 from "argon2";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { audit } from "@/lib/audit";
 import type { Database } from "@prisma/client";
 
 const patchSchema = z.object({
-  role: z.enum(["ADMIN", "VIEWER"]).optional(),
-  databases: z.array(z.enum(["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"])).optional(),
+  role:        z.enum(["ADMIN", "VIEWER"]).optional(),
+  databases:   z.array(z.enum(["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"])).optional(),
+  newPassword: z.string().min(8).max(128).optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -23,9 +25,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Ongeldige invoer" }, { status: 400 });
   }
 
-  const { role, databases } = parse.data;
+  const { role, databases, newPassword } = parse.data;
   const updateData: Record<string, unknown> = {};
   if (role) updateData.role = role;
+  if (newPassword) {
+    updateData.passwordHash = await argon2.hash(newPassword);
+  }
 
   if (databases !== undefined) {
     await db.userDatabase.deleteMany({ where: { userId: id } });

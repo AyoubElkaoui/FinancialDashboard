@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Shield } from "lucide-react";
+import { Loader2, Plus, Trash2, Shield, KeyRound } from "lucide-react";
 
 const DB_OPTIONS = ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"] as const;
 type DbOption = (typeof DB_OPTIONS)[number];
@@ -203,18 +203,41 @@ export default function GebruikersPage() {
                     </div>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => {
-                    if (confirm(`Gebruiker ${user.email} verwijderen?`)) {
-                      deleteMutation.mutate(user.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-blue-600"
+                    title="Wachtwoord resetten"
+                    onClick={() => {
+                      const pw = prompt(`Nieuw wachtwoord voor ${user.email} (min. 8 tekens):`);
+                      if (!pw || pw.length < 8) return;
+                      fetch(`/api/admin/users/${user.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ newPassword: pw }),
+                      }).then(r => r.ok
+                        ? toast.success(`Wachtwoord van ${user.email} gewijzigd`)
+                        : toast.error("Wachtwoord wijzigen mislukt")
+                      );
+                    }}
+                  >
+                    <KeyRound className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive"
+                    title="Gebruiker verwijderen"
+                    onClick={() => {
+                      if (confirm(`Gebruiker ${user.email} verwijderen?`)) {
+                        deleteMutation.mutate(user.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))
