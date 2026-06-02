@@ -64,9 +64,21 @@ export async function GET(request: NextRequest) {
   }
 
   // Lees uit read-model
+  // verbergLeeg=true → verberg projecten zonder enige financiële activiteit
+  const verbergLeeg = s.get("verbergLeeg") !== "false";
+
   const where = {
     database:    database as Database,
     aanneemsom:  { gte: 0 },   // systeemprojecten (neg aanneemsom) uitsluiten
+    ...(verbergLeeg ? {
+      OR: [
+        { aanneemsom:      { gt: 0 } },
+        { gefactureerd:    { gt: 0 } },
+        { kostenMateriaal: { gt: 0 } },
+        { kostenArbeid:    { gt: 0 } },
+        { kostenOverig:    { gt: 0 } },
+      ],
+    } : {}),
     ...(search ? {
       OR: [
         { naam:      { contains: search, mode: "insensitive" as const } },

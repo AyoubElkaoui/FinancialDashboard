@@ -321,7 +321,8 @@ function ProjectenInner() {
   const [search,    setSearch]    = useState("");
   const [mounted,   setMounted]   = useState(false);
   const [view,      setView]      = useState<View>("table");
-  const [pageSize,  setPageSize]  = useState<number>(250);
+  const [pageSize,     setPageSize]     = useState<number>(250);
+  const [verbergLeeg,  setVerbergLeeg]  = useState<boolean>(true);
 
   useEffect(() => {
     try {
@@ -343,9 +344,9 @@ function ProjectenInner() {
   }, []);
 
   const { data, isLoading } = useQuery<{ data: ElmarProjectSummary[]; total: number }>({
-    queryKey: ["elmar-projecten", activeDb, search, pageSize],
+    queryKey: ["elmar-projecten", activeDb, search, pageSize, verbergLeeg],
     queryFn: () => {
-      const params = new URLSearchParams({ database: activeDb, pageSize: String(pageSize) });
+      const params = new URLSearchParams({ database: activeDb, pageSize: String(pageSize), verbergLeeg: String(verbergLeeg) });
       if (search) params.set("search", search);
       return fetch(`/api/v1/projecten?${params}`).then(r => r.json());
     },
@@ -391,6 +392,17 @@ function ProjectenInner() {
             onChange={e => setSearch(e.target.value)}
             className="h-9 w-64 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
+
+          {/* Toggle lege projecten */}
+          <button
+            onClick={() => setVerbergLeeg(v => !v)}
+            className={`h-9 px-3 rounded-md border text-xs font-medium transition-colors ${
+              verbergLeeg ? "bg-blue-600 text-white border-blue-600" : "bg-background text-muted-foreground hover:bg-muted"
+            }`}
+            title={verbergLeeg ? "Toont alleen projecten met activiteit — klik om alles te tonen" : "Toont alle projecten — klik om lege te verbergen"}
+          >
+            {verbergLeeg ? "Actief" : "Alles"}
+          </button>
 
           {/* Page size selector */}
           <div className="flex items-center rounded-md border overflow-hidden text-xs">
