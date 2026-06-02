@@ -63,9 +63,12 @@ function GrootboekInner() {
   const activeTab = get("tab") ?? "mutaties";
 
   const mutatieParams = {
-    page: Number(get("page") ?? 1),
-    pageSize: Number(get("pageSize") ?? 50),
-    rubriekId: get("rubriekId") ? Number(get("rubriekId")) : undefined,
+    page:        Number(get("page") ?? 1),
+    pageSize:    Number(get("pageSize") ?? 50),
+    rubriekCode: get("rubriekCode") ?? undefined,
+    search:      get("search")      ?? undefined,
+    dateFrom:    get("dateFrom")    ?? undefined,
+    dateTo:      get("dateTo")      ?? undefined,
   };
 
   const { data: rubrieken } = useQuery({
@@ -99,10 +102,32 @@ function GrootboekInner() {
         </TabsList>
 
         <TabsContent value="mutaties" className="space-y-4 mt-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <input
+              type="search"
+              placeholder="Zoek op project, rubriek, omschrijving…"
+              value={get("search") ?? ""}
+              onChange={e => setParams({ search: e.target.value || null, page: "1" })}
+              className="h-8 w-72 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <input
+              type="date"
+              lang="nl"
+              value={get("dateFrom") ?? ""}
+              onChange={e => setParams({ dateFrom: e.target.value || null, page: "1" })}
+              className="h-8 rounded-md border bg-background px-2 text-sm"
+            />
+            <span className="flex items-center text-sm text-muted-foreground">t/m</span>
+            <input
+              type="date"
+              lang="nl"
+              value={get("dateTo") ?? ""}
+              onChange={e => setParams({ dateTo: e.target.value || null, page: "1" })}
+              className="h-8 rounded-md border bg-background px-2 text-sm"
+            />
             <Select
-              value={String(mutatieParams.rubriekId ?? "alle")}
-              onValueChange={(v) => setParams({ rubriekId: v === "alle" ? null : v, page: "1" })}
+              value={mutatieParams.rubriekCode ?? "alle"}
+              onValueChange={(v) => setParams({ rubriekCode: v === "alle" ? null : v, page: "1" })}
             >
               <SelectTrigger className="h-8 w-56 text-sm">
                 <SelectValue placeholder="Rubriek" />
@@ -110,7 +135,7 @@ function GrootboekInner() {
               <SelectContent>
                 <SelectItem value="alle">Alle rubrieken</SelectItem>
                 {(rubrieken as Record<string, unknown>[] | undefined)?.map(r => (
-                  <SelectItem key={String(r.ID)} value={String(r.ID)} className="text-sm">
+                  <SelectItem key={String(r.REKENINGNUMMER)} value={String(r.REKENINGNUMMER)} className="text-sm">
                     {String(r.REKENINGNUMMER)} — {String(r.OMSCHRIJVING)}
                   </SelectItem>
                 ))}
