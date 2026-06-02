@@ -17,8 +17,8 @@ export async function GET(
   const database = req.nextUrl.searchParams.get("database") ?? "SERVICES";
 
   // Zoek in read-model op projectnummer (ID is altijd een string projectcode)
-  const rm = await db.rmProjectSummary.findUnique({
-    where: { database_projectNr: { database: database as Database, projectNr: id } },
+  const rm = await db.rmProjectSummary.findFirst({
+    where: { database: database as Database, projectNr: id },
   }).catch(() => null);
 
   if (!rm) {
