@@ -13,14 +13,23 @@ export async function GET(
 
   // Zoek in read-model (ID is altijd een string projectcode, bijv. "100-16-032")
   let rm = null;
+  let dbError: string | null = null;
   try {
     rm = await db.rmProjectSummary.findFirst({
       where: { database, projectNr: id },
     });
-  } catch { /* DB fout — terugvallen op lege staat */ }
+  } catch (e) {
+    dbError = e instanceof Error ? e.message : String(e);
+  }
 
   if (!rm) {
-    return Response.json({ error: "Project niet gevonden" }, { status: 404 });
+    // Tijdelijk: stuur dbError mee zodat we in DevTools de echte oorzaak zien
+    return Response.json({
+      error:    "Project niet gevonden",
+      id,
+      database: database as string,
+      dbError,
+    }, { status: 404 });
   }
 
   // App-parameters (optioneel)
