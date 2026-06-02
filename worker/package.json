@@ -1,0 +1,22 @@
+{
+  "name": "syntess-sync-worker",
+  "version": "1.0.0",
+  "description": "On-prem sync: Firebird (Atrium) → Postgres read-model",
+  "private": true,
+  "scripts": {
+    "validate": "ts-node src/validate.ts",
+    "sync": "ts-node src/index.ts",
+    "sync:services": "ts-node src/index.ts SERVICES"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "node-firebird": "^1.1.8",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}
