@@ -135,6 +135,12 @@ function ProjectDashboard() {
   const show = useWidgetPrefs();
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  const { data: syncMeta } = useQuery({
+    queryKey: ["sync-meta", activeDb],
+    queryFn: () => fetch(`/api/v1/sync-meta?database=${activeDb}`).then(r => r.json()) as Promise<{ status: string; gesynctOp: string | null }>,
+    staleTime: 60_000,
+  });
+
   const { data: kpis,      isLoading: kpisLoading }  = useQuery({ queryKey: ["dashboard","kpis",               activeDb], queryFn: dashboardApi.kpis,              ...opts });
   const { data: omzetData, isLoading: omzetLoading }  = useQuery({ queryKey: ["dashboard","omzet-per-maand",   activeDb], queryFn: dashboardApi.omzetPerMaand,     ...opts });
   const { data: topKlanten }                          = useQuery({ queryKey: ["dashboard","top-klanten",        activeDb], queryFn: dashboardApi.topKlanten,        ...opts });
@@ -192,9 +198,11 @@ function ProjectDashboard() {
         </div>
         <Badge variant="outline" className="gap-1.5 text-xs py-1 font-medium text-muted-foreground">
           <RefreshCw className="h-3 w-3" />
-          {lastUpdated
-            ? `Bijgewerkt om ${lastUpdated.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`
-            : "Laden…"}
+          {syncMeta?.gesynctOp
+            ? `Gesynchroniseerd ${new Date(syncMeta.gesynctOp).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} ${new Date(syncMeta.gesynctOp).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`
+            : lastUpdated
+              ? `Bijgewerkt om ${lastUpdated.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`
+              : "Nog niet gesynchroniseerd"}
         </Badge>
       </div>
 
