@@ -52,13 +52,13 @@ interface Stats {
 interface MaandRow  { label: string; jaar: number; maand: number; omzet: number }
 interface WeekRow   { label: string; aangemaakt: number; uitgevoerd: number; openstaand: number }
 
-interface KlantRow {
-  klant: string;
-  totaalBons: number;
-  week:  { openstaand: number; uitgevoerd: number; totaal: number };
-  maand: { openstaand: number; uitgevoerd: number; totaal: number };
-  jaar:  { openstaand: number; uitgevoerd: number; totaal: number };
+interface Buckets { open: number; uitg: number; totaal: number; }
+interface KlantgroepRow {
+  klantgroep: string; familie: string | null;
+  all: Buckets; week: Buckets; maand: Buckets; jaar: Buckets;
+  locaties: { klant: string; werkCode: string; all: Buckets }[];
 }
+interface KlantenResponse { klantgroepen: KlantgroepRow[]; }
 
 // ── Dashboard component ───────────────────────────────────────────────────────
 
@@ -84,8 +84,8 @@ export function MaintenanceDashboard() {
     staleTime: 60_000,
   });
 
-  const { data: klanten } = useQuery<KlantRow[]>({
-    queryKey: ["maintenance", "klanten"],
+  const { data: klantenData } = useQuery<KlantenResponse>({
+    queryKey: ["maintenance", "klanten-groepen"],
     queryFn:  () => fetch("/api/v1/maintenance/klanten?database=MAINTENANCE").then(r => r.json()),
     staleTime: 120_000,
   });
@@ -232,38 +232,38 @@ export function MaintenanceDashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {!klanten ? <div className="h-40 animate-pulse bg-muted rounded m-4" /> : (
+            {!klantenData ? <div className="h-40 animate-pulse bg-muted rounded m-4" /> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 border-b">
                     <tr>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Klant</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Week O</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Week U</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Maand O</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Maand U</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Jaar totaal</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Klantgroep</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vWk O</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vWk U</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vMd O</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vMd U</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Jaar</th>
                       <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Totaal</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {klanten.slice(0, 20).map((k, i) => (
-                      <tr key={k.klant} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
-                        <td className="px-4 py-2 font-medium text-xs truncate max-w-[200px]" title={k.klant}>{k.klant}</td>
+                    {(klantenData.klantgroepen ?? []).slice(0, 20).map((k, i) => (
+                      <tr key={k.klantgroep} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
+                        <td className="px-4 py-2 font-medium text-xs truncate max-w-[200px]" title={k.klantgroep}>{k.klantgroep}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.week.openstaand > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.week.openstaand}</span>
+                          <span className={k.week.open > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.week.open || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.week.uitgevoerd > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.week.uitgevoerd}</span>
+                          <span className={k.week.uitg > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.week.uitg || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.maand.openstaand > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.maand.openstaand}</span>
+                          <span className={k.maand.open > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.maand.open || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.maand.uitgevoerd > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.maand.uitgevoerd}</span>
+                          <span className={k.maand.uitg > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.maand.uitg || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">{k.jaar.totaal}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold">{k.totaalBons}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold">{k.all.totaal}</td>
                       </tr>
                     ))}
                   </tbody>
