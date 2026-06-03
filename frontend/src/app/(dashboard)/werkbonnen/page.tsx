@@ -265,10 +265,8 @@ interface WbRow {
   BONNUMMER: string; DATUM: string; OMSCHRIJVING: string;
   STATUS: string; STATUS_LABEL: string; METH_LABEL: string; FASE: string;
   KLANT: string; EIGENAAR: string; IS_GEFACTUREERD: boolean;
-  // Financieel uit DB
-  OPBRENGSTEN: number; UREN_WERKBON: number | null;
+  OPBRENGSTEN: number; UREN_WERKBON: number | null; UREN_CONTRACT: number | null;
   INDIRECT: number | null; B_MARGE: number | null; MARGE_PCT: number | null;
-  // Handmatig
   STREEFMARGE_PCT: number | null; VOLLEDIG_BETAALD: boolean; NOTITIES: string;
 }
 
@@ -423,17 +421,17 @@ function MaintenanceWerkbonnenInner() {
                 <Th>Fase</Th>
                 <Th>Eigenaar</Th>
                 <Th>Fact.</Th>
-                {/* Financieel compact — altijd 2 kolommen, details via ✎ */}
                 <Th right>Opbrengst</Th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground text-right whitespace-nowrap cursor-help" title="Uren: exacte bon-uren (vet) of contract-totaal als indicatie (~)">Uren</th>
                 <Th right>B Marge</Th>
                 <Th>{""}</Th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Laden…</td></tr>
+                <tr><td colSpan={12} className="py-12 text-center text-muted-foreground">Laden…</td></tr>
               ) : bons.length === 0 ? (
-                <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Geen werkbonnen gevonden</td></tr>
+                <tr><td colSpan={12} className="py-12 text-center text-muted-foreground">Geen werkbonnen gevonden</td></tr>
               ) : bons.flatMap((wb, i) => {
                 const editing = editingBon === wb.BONNUMMER;
                 const heeftFinancieel = wb.OPBRENGSTEN > 0 || wb.B_MARGE != null;
@@ -455,16 +453,29 @@ function MaintenanceWerkbonnenInner() {
                         ? <span className="text-emerald-600 font-semibold">✓</span>
                         : <span className="text-muted-foreground text-[10px]">nee</span>}
                     </td>
-                    {/* Financieel — compact, details via ✎ */}
                     <td className="px-3 py-2.5 text-right tabular-nums text-xs">
                       {wb.OPBRENGSTEN > 0
                         ? <span className="font-medium">{fmt(wb.OPBRENGSTEN)}</span>
-                        : <span className="text-muted-foreground/40 text-[10px]">geen</span>}
+                        : <span className="text-muted-foreground/40 text-[10px]">—</span>}
+                    </td>
+                    {/* Uren: bon-niveau indien beschikbaar, anders contract-totaal als indicatie */}
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs" title={
+                      wb.UREN_WERKBON != null
+                        ? `${wb.UREN_WERKBON.toFixed(1)}u op deze bon`
+                        : wb.UREN_CONTRACT != null
+                          ? `${wb.UREN_CONTRACT.toFixed(0)}u totaal op contract (niet per bon)`
+                          : "Geen uren"
+                    }>
+                      {wb.UREN_WERKBON != null
+                        ? <span className="text-slate-700 dark:text-slate-300">{wb.UREN_WERKBON.toFixed(1)}</span>
+                        : wb.UREN_CONTRACT != null
+                          ? <span className="text-muted-foreground text-[10px]">~{wb.UREN_CONTRACT.toFixed(0)}</span>
+                          : <span className="text-muted-foreground/40 text-[10px]">—</span>}
                     </td>
                     <td className={`px-3 py-2.5 text-right tabular-nums text-xs font-semibold ${wb.B_MARGE != null ? (wb.B_MARGE >= 0 ? "text-emerald-600" : "text-red-600") : ""}`}>
                       {wb.B_MARGE != null
                         ? fmt(wb.B_MARGE)
-                        : <span className="text-muted-foreground/40 text-[10px]">{heeftFinancieel ? "—" : "geen data"}</span>}
+                        : <span className="text-muted-foreground/40 text-[10px]">—</span>}
                     </td>
                     <td className="px-3 py-2.5">
                       <button

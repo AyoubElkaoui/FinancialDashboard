@@ -128,8 +128,9 @@ model RmWerkbon {
   werkCode         String?  @map("werk_code")
   isGefactureerd   Boolean  @default(false) @map("is_gefactureerd")
   // Financiële velden uit DB (sync vult/overschrijft deze)
-  opbrengsten      Decimal? @db.Decimal(12, 2)                   // AT_KLNTBREG sum per bon
-  urenWerkbon      Decimal? @db.Decimal(10, 2) @map("uren_werkbon") // AT_URENBREG sum per bon (23% dekking)
+  opbrengsten      Decimal? @db.Decimal(12, 2)                       // AT_KLNTBREG sum per bon
+  urenWerkbon      Decimal? @db.Decimal(10, 2) @map("uren_werkbon")  // AT_URENBREG per bon (23%)
+  urenContract     Decimal? @db.Decimal(10, 2) @map("uren_contract") // AT_URENBREG contract-totaal (77%)
   synctOp          DateTime @default(now()) @updatedAt @map("synct_op")
 
   // Handmatig — ENIGE invulveld (sync raakt dit NOOIT aan)

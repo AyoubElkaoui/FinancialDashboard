@@ -82,8 +82,9 @@ export async function GET(req: NextRequest) {
     VOLLEDIG_BETAALD:  wb.volledigBetaald ?? false,
     // Financieel uit DB
     OPBRENGSTEN:       Number(wb.opbrengsten ?? 0),
-    UREN_WERKBON:      wb.urenWerkbon != null ? Number(wb.urenWerkbon) : null,
-    // Berekend (indirect = uren × €7.5; marge = opbrengsten - indirect)
+    UREN_WERKBON:      wb.urenWerkbon  != null ? Number(wb.urenWerkbon)  : null,
+    UREN_CONTRACT:     wb.urenContract != null ? Number(wb.urenContract) : null,
+    // Berekend: gebruik bon-uren als beschikbaar, anders contract-uren als indicatie
     INDIRECT:          wb.urenWerkbon != null ? Number(wb.urenWerkbon) * 7.5 : null,
     B_MARGE:           wb.urenWerkbon != null
                          ? Number(wb.opbrengsten ?? 0) - Number(wb.urenWerkbon) * 7.5
