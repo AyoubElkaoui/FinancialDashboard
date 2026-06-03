@@ -1,77 +1,155 @@
+/**
+ * Klantgroepen Maintenance — gebaseerd op contractcode (AT_WERK.GC_CODE).
+ * Alleen 400-reeks werkbonnen (27.072). Niet-400 (284, 1%) uitgesloten.
+ * Periode: rolling 7d / 30d / huidig jaar — consistent met Index-pagina.
+ */
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { resolveKlantgroep } from "@/config/maintenance-klantgroep-mapping";
+import type { Familie } from "@/config/maintenance-klantgroep-mapping";
+
+// ── Hulpfuncties ───────────────────────────────────────────────────────────
+
+function open(status: string) { return ["A","I"].includes(status); }
+function uitg(status: string) { return ["U","V"].includes(status); }
+
+interface Buckets {
+  open: number; uitg: number; totaal: number;
+}
+const emptyBuckets = (): Buckets => ({ open: 0, uitg: 0, totaal: 0 });
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+interface LocatieRow {
+  klant:    string;
+  werkCode: string;
+  all:      Buckets;
+  week:     Buckets;
+  maand:    Buckets;
+  jaar:     Buckets;
+}
+
+interface KlantgroepRow {
+  klantgroep: string;
+  familie:    Familie;
+  all:        Buckets;
+  week:       Buckets;
+  maand:      Buckets;
+  jaar:       Buckets;
+  locaties:   LocatieRow[];
+}
+
+// ── Route ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
-  // Rolling vensters — geen kalenderweek/maand die leeg kan zijn
-  const now    = new Date();
-  const startW = new Date(now); startW.setDate(now.getDate() - 7);   // afgelopen 7 dagen
-  const startM = new Date(now); startM.setDate(now.getDate() - 30);  // afgelopen 30 dagen
-  const startY = new Date(now.getFullYear(), 0, 1);
 
-  // Top-50 klanten gesorteerd op totaal aantal werkbonnen
-  const klantGroups = await db.rmWerkbon.groupBy({
-    by:      ["klant"],
-    where:   { database: database as never },
-    _count:  { bonnummer: true },
-    orderBy: { _count: { bonnummer: "desc" } },
-    take:    50,
-  });
+  // Rolling-vensters (consistent met Index-pagina bron GC_BOEKDATUM)
+  const now      = new Date();
+  const dag7     = new Date(now); dag7.setDate(now.getDate() - 7);
+  const dag30    = new Date(now); dag30.setDate(now.getDate() - 30);
+  const jaarStart = new Date(now.getFullYear(), 0, 1);
 
-  // Per klant: week/maand/jaar tellingen
-  const klantNamen = klantGroups.map(k => k.klant ?? "").filter(Boolean);
+  // Per (werkCode, klant, status) — 400-reeks only — met periode-vlaggen
+  type Row = {
+    werk_code: string;
+    klant:     string | null;
+    status:    string;
+    totaal:    string;
+    is_week:   string;
+    is_maand:  string;
+    is_jaar:   string;
+  };
 
-  const [weekData, maandData, jaarData] = await Promise.all([
-    db.rmWerkbon.groupBy({
-      by: ["klant", "status"],
-      where: { database: database as never, klant: { in: klantNamen }, datum: { gte: startW } },
-      _count: { bonnummer: true },
-    }),
-    db.rmWerkbon.groupBy({
-      by: ["klant", "status"],
-      where: { database: database as never, klant: { in: klantNamen }, datum: { gte: startM } },
-      _count: { bonnummer: true },
-    }),
-    db.rmWerkbon.groupBy({
-      by: ["klant", "status"],
-      where: { database: database as never, klant: { in: klantNamen }, datum: { gte: startY } },
-      _count: { bonnummer: true },
-    }),
-  ]);
+  const rows = await db.$queryRaw<Row[]>`
+    SELECT
+      werk_code,
+      COALESCE(klant, '') AS klant,
+      status,
+      COUNT(*)::text AS totaal,
+      SUM(CASE WHEN datum >= ${dag7}     THEN 1 ELSE 0 END)::text AS is_week,
+      SUM(CASE WHEN datum >= ${dag30}    THEN 1 ELSE 0 END)::text AS is_maand,
+      SUM(CASE WHEN datum >= ${jaarStart} THEN 1 ELSE 0 END)::text AS is_jaar
+    FROM rm_werkbon
+    WHERE database::text = ${database}
+      AND werk_code LIKE '400%'
+    GROUP BY werk_code, klant, status
+    ORDER BY werk_code, klant, status
+  `.catch(() => [] as Row[]);
 
-  function buildMap(rows: { klant: string | null; status: string; _count: { bonnummer: number } }[]) {
-    const m = new Map<string, { openstaand: number; uitgevoerd: number }>();
-    for (const r of rows) {
-      const k = r.klant ?? "";
-      if (!m.has(k)) m.set(k, { openstaand: 0, uitgevoerd: 0 });
-      const e = m.get(k)!;
-      if (["A","I"].includes(r.status)) e.openstaand += r._count.bonnummer;
-      else e.uitgevoerd += r._count.bonnummer;
+  // ── Aggregeer per klantgroep & locatie in Node.js ─────────────────────
+
+  const klantgroepMap = new Map<string, KlantgroepRow>();
+  // locaties geïndexeerd op klantgroep+klant+werkCode
+  const locatieMap = new Map<string, LocatieRow>();
+
+  for (const r of rows) {
+    const n     = parseInt(r.totaal);
+    const nW    = parseInt(r.is_week);
+    const nM    = parseInt(r.is_maand);
+    const nJ    = parseInt(r.is_jaar);
+    const isO   = open(r.status);
+    const isU   = uitg(r.status);
+
+    const { klantgroep, familie } = resolveKlantgroep(r.werk_code);
+    const locKey = `${klantgroep}||${r.werk_code}||${r.klant ?? ""}`;
+
+    // Klantgroep
+    if (!klantgroepMap.has(klantgroep)) {
+      klantgroepMap.set(klantgroep, {
+        klantgroep, familie,
+        all: emptyBuckets(), week: emptyBuckets(),
+        maand: emptyBuckets(), jaar: emptyBuckets(),
+        locaties: [],
+      });
     }
-    return m;
+    const kg = klantgroepMap.get(klantgroep)!;
+    kg.all.totaal += n;  if (isO) kg.all.open += n;  if (isU) kg.all.uitg += n;
+    kg.week.totaal  += nW; if (isO) kg.week.open  += nW; if (isU) kg.week.uitg  += nW;
+    kg.maand.totaal += nM; if (isO) kg.maand.open += nM; if (isU) kg.maand.uitg += nM;
+    kg.jaar.totaal  += nJ; if (isO) kg.jaar.open  += nJ; if (isU) kg.jaar.uitg  += nJ;
+
+    // Locatie (werkCode + klant-naam)
+    if (!locatieMap.has(locKey)) {
+      locatieMap.set(locKey, {
+        klant:    r.klant ?? "",
+        werkCode: r.werk_code,
+        all: emptyBuckets(), week: emptyBuckets(),
+        maand: emptyBuckets(), jaar: emptyBuckets(),
+      });
+    }
+    const loc = locatieMap.get(locKey)!;
+    loc.all.totaal += n;  if (isO) loc.all.open += n;  if (isU) loc.all.uitg += n;
+    loc.week.totaal  += nW; if (isO) loc.week.open  += nW; if (isU) loc.week.uitg  += nW;
+    loc.maand.totaal += nM; if (isO) loc.maand.open += nM; if (isU) loc.maand.uitg += nM;
+    loc.jaar.totaal  += nJ; if (isO) loc.jaar.open  += nJ; if (isU) loc.jaar.uitg  += nJ;
   }
 
-  const weekMap  = buildMap(weekData  as never);
-  const maandMap = buildMap(maandData as never);
-  const jaarMap  = buildMap(jaarData  as never);
+  // Koppel locaties aan klantgroepen
+  for (const loc of locatieMap.values()) {
+    const { klantgroep } = resolveKlantgroep(loc.werkCode);
+    klantgroepMap.get(klantgroep)?.locaties.push(loc);
+  }
 
-  const data = klantGroups.map(k => {
-    const naam  = k.klant ?? "Onbekend";
-    const week  = weekMap.get(naam)  ?? { openstaand: 0, uitgevoerd: 0 };
-    const maand = maandMap.get(naam) ?? { openstaand: 0, uitgevoerd: 0 };
-    const jaar  = jaarMap.get(naam)  ?? { openstaand: 0, uitgevoerd: 0 };
-    return {
-      klant:      naam,
-      totaalBons: k._count.bonnummer,
-      week:       { openstaand: week.openstaand,  uitgevoerd: week.uitgevoerd,  totaal: week.openstaand  + week.uitgevoerd  },
-      maand:      { openstaand: maand.openstaand, uitgevoerd: maand.uitgevoerd, totaal: maand.openstaand + maand.uitgevoerd },
-      jaar:       { openstaand: jaar.openstaand,  uitgevoerd: jaar.uitgevoerd,  totaal: jaar.openstaand  + jaar.uitgevoerd  },
-    };
+  // Sorteer locaties per klantgroep op totaal desc
+  for (const kg of klantgroepMap.values()) {
+    kg.locaties.sort((a, b) => b.all.totaal - a.all.totaal);
+  }
+
+  // Sorteer klantgroepen: familie-volgorde, daarna totaal desc
+  const FAMILIE_SORT: Record<string, number> = {
+    Bestseller: 0, 'AS Watson': 1, CeX: 2,
+  };
+  const klantgroepen = [...klantgroepMap.values()].sort((a, b) => {
+    const fa = a.familie ? FAMILIE_SORT[a.familie] ?? 3 : 3;
+    const fb = b.familie ? FAMILIE_SORT[b.familie] ?? 3 : 3;
+    if (fa !== fb) return fa - fb;
+    return b.all.totaal - a.all.totaal;
   });
 
-  return Response.json(data);
+  return Response.json({ klantgroepen });
 }
