@@ -169,8 +169,9 @@ export function Topbar() {
       {/* Right controls */}
       <div className="flex items-center gap-1 shrink-0">
 
-        {/* Last refresh indicator */}
-        <span className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground mr-2 select-none">
+        {/* Last refresh indicator — suppressHydrationWarning omdat Date.now()
+            server ≠ client kan zijn (render-tijd vs. hydration-tijd) */}
+        <span suppressHydrationWarning className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground mr-2 select-none">
           <Activity className="h-3 w-3" />
           {timeAgo(lastRefresh)}
         </span>
