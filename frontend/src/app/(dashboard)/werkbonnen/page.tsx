@@ -380,7 +380,7 @@ function MaintenanceWerkbonnenInner() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Werkbonnen</h1>
           <p className="text-sm text-muted-foreground">
-            {data?.total != null ? `${data.total.toLocaleString("nl-NL")} werkbonnen` : "Laden…"}
+            {data?.total != null ? `${data.total} werkbonnen` : "Laden…"}
             <span className="ml-2 text-[11px] text-muted-foreground/70">· server-side paginatie · klik ✎ voor handmatige velden</span>
           </p>
         </div>
@@ -508,8 +508,8 @@ function MaintenanceWerkbonnenInner() {
 
       {/* Paginatie */}
       <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">
-          {data?.total ? `${((params.page - 1) * params.pageSize + 1).toLocaleString("nl-NL")}–${Math.min(params.page * params.pageSize, data.total).toLocaleString("nl-NL")} van ${data.total.toLocaleString("nl-NL")}` : ""}
+        <span suppressHydrationWarning className="text-muted-foreground">
+          {data?.total ? `${(params.page - 1) * params.pageSize + 1}–${Math.min(params.page * params.pageSize, data.total)} van ${data.total}` : ""}
         </span>
         <div className="flex gap-2">
           <button disabled={params.page <= 1} onClick={() => setParams({ page: String(params.page - 1) })}

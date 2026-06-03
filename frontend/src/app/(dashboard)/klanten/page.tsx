@@ -145,7 +145,7 @@ function MaintenanceKlantenInner() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Klanten</h1>
           <p className="text-sm text-muted-foreground">
-            {isLoading ? "Laden…" : `${allGroepen.length} klantgroepen · ${totaal400.toLocaleString("nl-NL")} werkbonnen (400-contracten)`}
+            {isLoading ? "Laden…" : `${allGroepen.length} klantgroepen · ${totaal400} werkbonnen (400-contracten)`}
           </p>
           <p className="text-[11px] text-muted-foreground/70">
             vWk = vorige kalenderweek (ma–zo) · vMd = vorige kalendermaand · Jaar = YTD · op boekdatum
