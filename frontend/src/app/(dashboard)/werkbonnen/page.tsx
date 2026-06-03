@@ -412,7 +412,7 @@ function MaintenanceWerkbonnenInner() {
       {/* Tabel */}
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1100px]">
+          <table className="w-full text-sm min-w-[760px]">
             <thead className="bg-muted/40 border-b">
               <tr>
                 <Th>Bonnummer</Th>
@@ -423,29 +423,26 @@ function MaintenanceWerkbonnenInner() {
                 <Th>Fase</Th>
                 <Th>Eigenaar</Th>
                 <Th>Fact.</Th>
-                <Th right>Opbrengsten</Th>
-                <Th right>Uren</Th>
-                <Th right>Indirect</Th>
+                {/* Financieel compact — altijd 2 kolommen, details via ✎ */}
+                <Th right>Opbrengst</Th>
                 <Th right>B Marge</Th>
-                <Th right>%</Th>
-                <Th right>Streef%</Th>
-                <Th>Betaald</Th>
                 <Th>{""}</Th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={14} className="py-12 text-center text-muted-foreground">Laden…</td></tr>
+                <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Laden…</td></tr>
               ) : bons.length === 0 ? (
-                <tr><td colSpan={14} className="py-12 text-center text-muted-foreground">Geen werkbonnen gevonden</td></tr>
+                <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">Geen werkbonnen gevonden</td></tr>
               ) : bons.flatMap((wb, i) => {
                 const editing = editingBon === wb.BONNUMMER;
+                const heeftFinancieel = wb.OPBRENGSTEN > 0 || wb.B_MARGE != null;
                 const rows = [
                   <tr key={wb.BONNUMMER} className={`border-b hover:bg-muted/30 transition-colors ${editing ? "bg-blue-50 dark:bg-blue-950/20" : i % 2 === 1 ? "bg-muted/10" : ""}`}>
                     <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{wb.BONNUMMER}</td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(wb.DATUM)}</td>
-                    <td className="px-3 py-2.5 max-w-[160px] truncate text-xs" title={wb.KLANT}>{wb.KLANT || "—"}</td>
-                    <td className="px-3 py-2.5 max-w-[180px] truncate text-xs text-muted-foreground" title={wb.OMSCHRIJVING}>{wb.OMSCHRIJVING || "—"}</td>
+                    <td className="px-3 py-2.5 max-w-[180px] truncate text-xs font-medium" title={wb.KLANT}>{wb.KLANT || "—"}</td>
+                    <td className="px-3 py-2.5 max-w-[200px] truncate text-xs text-muted-foreground" title={wb.OMSCHRIJVING}>{wb.OMSCHRIJVING || "—"}</td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_CLR[wb.STATUS] ?? ""}`}>
                         {wb.STATUS_LABEL}
@@ -456,36 +453,24 @@ function MaintenanceWerkbonnenInner() {
                     <td className="px-3 py-2.5 text-center text-xs">
                       {wb.IS_GEFACTUREERD
                         ? <span className="text-emerald-600 font-semibold">✓</span>
-                        : <span className="text-muted-foreground">—</span>}
+                        : <span className="text-muted-foreground text-[10px]">nee</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs font-medium">
-                      {wb.OPBRENGSTEN > 0 ? fmt(wb.OPBRENGSTEN) : <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
-                      {wb.UREN_WERKBON != null ? wb.UREN_WERKBON.toFixed(1) : <span className="text-muted-foreground/40">—</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
-                      {wb.INDIRECT != null ? fmt(wb.INDIRECT) : <span className="text-muted-foreground/40">—</span>}
+                    {/* Financieel — compact, details via ✎ */}
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs">
+                      {wb.OPBRENGSTEN > 0
+                        ? <span className="font-medium">{fmt(wb.OPBRENGSTEN)}</span>
+                        : <span className="text-muted-foreground/40 text-[10px]">geen</span>}
                     </td>
                     <td className={`px-3 py-2.5 text-right tabular-nums text-xs font-semibold ${wb.B_MARGE != null ? (wb.B_MARGE >= 0 ? "text-emerald-600" : "text-red-600") : ""}`}>
-                      {wb.B_MARGE != null ? fmt(wb.B_MARGE) : <span className="text-muted-foreground/40">—</span>}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${wb.MARGE_PCT != null ? (wb.MARGE_PCT >= 20 ? "text-emerald-600" : wb.MARGE_PCT >= 0 ? "text-amber-600" : "text-red-600") : ""}`}>
-                      {wb.MARGE_PCT != null ? `${wb.MARGE_PCT.toFixed(1)}%` : <span className="text-muted-foreground/40">—</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-blue-600">
-                      {wb.STREEFMARGE_PCT != null ? `${wb.STREEFMARGE_PCT.toFixed(1)}%` : <span className="text-muted-foreground/40">—</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-xs">
-                      {wb.VOLLEDIG_BETAALD
-                        ? <span className="text-emerald-600 font-semibold">✓</span>
-                        : <span className="text-muted-foreground">—</span>}
+                      {wb.B_MARGE != null
+                        ? fmt(wb.B_MARGE)
+                        : <span className="text-muted-foreground/40 text-[10px]">{heeftFinancieel ? "—" : "geen data"}</span>}
                     </td>
                     <td className="px-3 py-2.5">
                       <button
                         onClick={() => setEditingBon(editing ? null : wb.BONNUMMER)}
                         className={`h-6 w-6 flex items-center justify-center rounded text-xs transition-colors ${editing ? "bg-blue-600 text-white" : "hover:bg-muted text-muted-foreground"}`}
-                        title="Handmatige velden bewerken"
+                        title="Financieel detail + streefmarge instellen"
                       >
                         ✎
                       </button>
@@ -494,7 +479,7 @@ function MaintenanceWerkbonnenInner() {
                 ];
                 if (editing) {
                   rows.push(
-                    <tr key={`${wb.BONNUMMER}-edit`} className="border-b bg-blue-50 dark:bg-blue-950/20">
+                    <tr key={`${wb.BONNUMMER}-edit`} className="border-b bg-blue-50/60 dark:bg-blue-950/20">
                       <EditRow wb={wb} onSaved={() => { refetch(); }} />
                     </tr>
                   );
