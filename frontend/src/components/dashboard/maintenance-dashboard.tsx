@@ -43,7 +43,7 @@ function useShow() {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Stats {
-  periode: { week: string; maand: string; jaar: string; maandLabel: string };
+  periode: { weekStart: string; maandStart: string; jaarStart: string; weekLabel: string; maandLabel: string };
   werkbonnen: { totaal: number; openstaand: number; uitgevoerd: number; weekBons: number; maandBons: number };
   omzet: { week: number; maand: number; jaar: number; vorigeMaand: number };
   topKlanten: { klant: string; aantalBons: number }[];
@@ -134,27 +134,27 @@ export function MaintenanceDashboard() {
             icon={CheckCircle2} color="green"
           />
           <StatCard
-            label="Bons afg. 7 dagen"
+            label="Bons vorige week"
             value={statsLoading ? "—" : String(stats?.werkbonnen.weekBons ?? 0)}
-            sub="op boekdatum"
+            sub={stats?.periode.weekLabel ?? "Vorige week"}
             icon={Wrench} color="slate"
           />
           <StatCard
-            label="Bons afg. 30 dagen"
+            label="Bons vorige maand"
             value={statsLoading ? "—" : String(stats?.werkbonnen.maandBons ?? 0)}
-            sub="op boekdatum"
+            sub={stats?.periode.maandLabel ?? "Vorige maand"}
             icon={Wrench} color="blue"
           />
           <StatCard
-            label="Omzet afg. 7 dagen"
+            label="Omzet vorige week"
             value={statsLoading ? "—" : formatCurrency(stats?.omzet.week ?? 0)}
-            sub="journaal 8xxx credit"
+            sub={stats?.periode.weekLabel ?? "Vorige week"}
             icon={TrendingUp} color="green"
           />
           <StatCard
-            label="Omzet afg. 30 dagen"
+            label="Omzet vorige maand"
             value={statsLoading ? "—" : formatCurrency(stats?.omzet.maand ?? 0)}
-            sub="journaal 8xxx credit"
+            sub={stats?.periode.maandLabel ?? "Vorige maand"}
             icon={TrendingUp} color="blue"
           />
         </div>

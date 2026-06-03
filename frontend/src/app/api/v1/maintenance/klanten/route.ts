@@ -1,7 +1,12 @@
 /**
  * Klantgroepen Maintenance — gebaseerd op contractcode (AT_WERK.GC_CODE).
  * Alleen 400-reeks werkbonnen (27.072). Niet-400 (284, 1%) uitgesloten.
- * Periode: rolling 7d / 30d / huidig jaar — consistent met Index-pagina.
+ *
+ * Periode-definitie (besluit Ayoub, 2026-06-03):
+ *   "Wk"  = VORIGE kalenderweek (ma–zo)
+ *   "Md"  = VORIGE kalendermaand (1e–laatste dag)
+ *   "Jaar" = huidig kalenderjaar YTD
+ * Datumveld = rm_werkbon.datum = AT_DOCUMENT.GC_BOEKDATUM (bevestigd).
  */
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
@@ -14,30 +19,17 @@ import type { Familie } from "@/config/maintenance-klantgroep-mapping";
 function open(status: string) { return ["A","I"].includes(status); }
 function uitg(status: string) { return ["U","V"].includes(status); }
 
-interface Buckets {
-  open: number; uitg: number; totaal: number;
-}
+interface Buckets { open: number; uitg: number; totaal: number; }
 const emptyBuckets = (): Buckets => ({ open: 0, uitg: 0, totaal: 0 });
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
 interface LocatieRow {
-  klant:    string;
-  werkCode: string;
-  all:      Buckets;
-  week:     Buckets;
-  maand:    Buckets;
-  jaar:     Buckets;
+  klant: string; werkCode: string;
+  all: Buckets; week: Buckets; maand: Buckets; jaar: Buckets;
 }
-
 interface KlantgroepRow {
-  klantgroep: string;
-  familie:    Familie;
-  all:        Buckets;
-  week:       Buckets;
-  maand:      Buckets;
-  jaar:       Buckets;
-  locaties:   LocatieRow[];
+  klantgroep: string; familie: Familie;
+  all: Buckets; week: Buckets; maand: Buckets; jaar: Buckets;
+  locaties: LocatieRow[];
 }
 
 // ── Route ──────────────────────────────────────────────────────────────────
@@ -48,21 +40,13 @@ export async function GET(req: NextRequest) {
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
 
-  // Rolling-vensters (consistent met Index-pagina bron GC_BOEKDATUM)
-  const now      = new Date();
-  const dag7     = new Date(now); dag7.setDate(now.getDate() - 7);
-  const dag30    = new Date(now); dag30.setDate(now.getDate() - 30);
-  const jaarStart = new Date(now.getFullYear(), 0, 1);
-
-  // Per (werkCode, klant, status) — 400-reeks only — met periode-vlaggen
+  // Periode-grenzen:
+  //   Vorige week: date_trunc('week', today) - 7d  →  date_trunc('week', today)
+  //   Vorige maand: date_trunc('month', today) - 1m →  date_trunc('month', today)
+  //   Huidig jaar: date_trunc('year', today) → now
   type Row = {
-    werk_code: string;
-    klant:     string | null;
-    status:    string;
-    totaal:    string;
-    is_week:   string;
-    is_maand:  string;
-    is_jaar:   string;
+    werk_code: string; klant: string; status: string;
+    totaal: string; is_week: string; is_maand: string; is_jaar: string;
   };
 
   const rows = await db.$queryRaw<Row[]>`
@@ -71,9 +55,14 @@ export async function GET(req: NextRequest) {
       COALESCE(klant, '') AS klant,
       status,
       COUNT(*)::text AS totaal,
-      SUM(CASE WHEN datum >= ${dag7}     THEN 1 ELSE 0 END)::text AS is_week,
-      SUM(CASE WHEN datum >= ${dag30}    THEN 1 ELSE 0 END)::text AS is_maand,
-      SUM(CASE WHEN datum >= ${jaarStart} THEN 1 ELSE 0 END)::text AS is_jaar
+      SUM(CASE WHEN datum >= date_trunc('week',  CURRENT_DATE) - INTERVAL '7 days'
+                AND datum <  date_trunc('week',  CURRENT_DATE)
+               THEN 1 ELSE 0 END)::text AS is_week,
+      SUM(CASE WHEN datum >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+                AND datum <  date_trunc('month', CURRENT_DATE)
+               THEN 1 ELSE 0 END)::text AS is_maand,
+      SUM(CASE WHEN datum >= date_trunc('year',  CURRENT_DATE)
+               THEN 1 ELSE 0 END)::text AS is_jaar
     FROM rm_werkbon
     WHERE database::text = ${database}
       AND werk_code LIKE '400%'
@@ -81,30 +70,22 @@ export async function GET(req: NextRequest) {
     ORDER BY werk_code, klant, status
   `.catch(() => [] as Row[]);
 
-  // ── Aggregeer per klantgroep & locatie in Node.js ─────────────────────
-
+  // Aggregeer per klantgroep & locatie
   const klantgroepMap = new Map<string, KlantgroepRow>();
-  // locaties geïndexeerd op klantgroep+klant+werkCode
-  const locatieMap = new Map<string, LocatieRow>();
+  const locatieMap    = new Map<string, LocatieRow>();
 
   for (const r of rows) {
-    const n     = parseInt(r.totaal);
-    const nW    = parseInt(r.is_week);
-    const nM    = parseInt(r.is_maand);
-    const nJ    = parseInt(r.is_jaar);
-    const isO   = open(r.status);
-    const isU   = uitg(r.status);
-
+    const n = parseInt(r.totaal), nW = parseInt(r.is_week),
+          nM = parseInt(r.is_maand), nJ = parseInt(r.is_jaar);
+    const isO = open(r.status), isU = uitg(r.status);
     const { klantgroep, familie } = resolveKlantgroep(r.werk_code);
-    const locKey = `${klantgroep}||${r.werk_code}||${r.klant ?? ""}`;
+    const locKey = `${klantgroep}||${r.werk_code}||${r.klant}`;
 
-    // Klantgroep
     if (!klantgroepMap.has(klantgroep)) {
       klantgroepMap.set(klantgroep, {
         klantgroep, familie,
         all: emptyBuckets(), week: emptyBuckets(),
-        maand: emptyBuckets(), jaar: emptyBuckets(),
-        locaties: [],
+        maand: emptyBuckets(), jaar: emptyBuckets(), locaties: [],
       });
     }
     const kg = klantgroepMap.get(klantgroep)!;
@@ -113,11 +94,9 @@ export async function GET(req: NextRequest) {
     kg.maand.totaal += nM; if (isO) kg.maand.open += nM; if (isU) kg.maand.uitg += nM;
     kg.jaar.totaal  += nJ; if (isO) kg.jaar.open  += nJ; if (isU) kg.jaar.uitg  += nJ;
 
-    // Locatie (werkCode + klant-naam)
     if (!locatieMap.has(locKey)) {
       locatieMap.set(locKey, {
-        klant:    r.klant ?? "",
-        werkCode: r.werk_code,
+        klant: r.klant, werkCode: r.werk_code,
         all: emptyBuckets(), week: emptyBuckets(),
         maand: emptyBuckets(), jaar: emptyBuckets(),
       });
@@ -129,26 +108,19 @@ export async function GET(req: NextRequest) {
     loc.jaar.totaal  += nJ; if (isO) loc.jaar.open  += nJ; if (isU) loc.jaar.uitg  += nJ;
   }
 
-  // Koppel locaties aan klantgroepen
   for (const loc of locatieMap.values()) {
     const { klantgroep } = resolveKlantgroep(loc.werkCode);
     klantgroepMap.get(klantgroep)?.locaties.push(loc);
   }
-
-  // Sorteer locaties per klantgroep op totaal desc
   for (const kg of klantgroepMap.values()) {
     kg.locaties.sort((a, b) => b.all.totaal - a.all.totaal);
   }
 
-  // Sorteer klantgroepen: familie-volgorde, daarna totaal desc
-  const FAMILIE_SORT: Record<string, number> = {
-    Bestseller: 0, 'AS Watson': 1, CeX: 2,
-  };
+  const FAMILIE_SORT: Record<string, number> = { Bestseller: 0, 'AS Watson': 1, CeX: 2 };
   const klantgroepen = [...klantgroepMap.values()].sort((a, b) => {
     const fa = a.familie ? FAMILIE_SORT[a.familie] ?? 3 : 3;
     const fb = b.familie ? FAMILIE_SORT[b.familie] ?? 3 : 3;
-    if (fa !== fb) return fa - fb;
-    return b.all.totaal - a.all.totaal;
+    return fa !== fb ? fa - fb : b.all.totaal - a.all.totaal;
   });
 
   return Response.json({ klantgroepen });

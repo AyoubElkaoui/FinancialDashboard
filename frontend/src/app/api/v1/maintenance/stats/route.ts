@@ -16,49 +16,62 @@ export async function GET(req: NextRequest) {
 
   const database = req.nextUrl.searchParams.get("database") ?? "MAINTENANCE";
 
-  const now    = new Date();
-  const dag7   = new Date(now); dag7.setDate(now.getDate() - 7);
-  const dag30  = new Date(now); dag30.setDate(now.getDate() - 30);
-  const startJaar = new Date(now.getFullYear(), 0, 1);
-  const dag30v = new Date(now); dag30v.setDate(now.getDate() - 60);  // vorige 30 dagen
+  // Periode-grenzen (besluit Ayoub 2026-06-03: vorige kalenderweek/maand):
+  //   Vorige week: date_trunc('week', today) - 7d → date_trunc('week', today)
+  //   Vorige maand: date_trunc('month', today) - 1m → date_trunc('month', today)
+  //   Huidig jaar YTD: date_trunc('year', today) → now
+  type PeriodeRow = { vorige_week_start: Date; vorige_maand_start: Date; jaar_start: Date };
+  const periodeRes = await db.$queryRaw<PeriodeRow[]>`
+    SELECT
+      (date_trunc('week',  CURRENT_DATE) - INTERVAL '7 days') AS vorige_week_start,
+      (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month') AS vorige_maand_start,
+      date_trunc('year',  CURRENT_DATE) AS jaar_start
+  `;
+  const p = periodeRes[0];
+  const voorWkStart  = new Date(p.vorige_week_start);
+  const voorWkEind   = new Date(voorWkStart); voorWkEind.setDate(voorWkStart.getDate() + 7);
+  const voorMdStart  = new Date(p.vorige_maand_start);
+  const voorMdEind   = new Date(voorMdStart); voorMdEind.setMonth(voorMdStart.getMonth() + 1);
+  const startJaar    = new Date(p.jaar_start);
 
-  // Werkbon-tellingen
   const [totaal, openstaand, uitgevoerd, weekBons, maandBons] = await Promise.all([
     db.rmWerkbon.count({ where: { database: database as never } }),
     db.rmWerkbon.count({ where: { database: database as never, status: { in: ["A","I"] } } }),
     db.rmWerkbon.count({ where: { database: database as never, status: { in: ["U","V"] } } }),
-    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: dag7 } } }),
-    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: dag30 } } }),
+    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: voorWkStart, lt: voorWkEind } } }),
+    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: voorMdStart, lt: voorMdEind } } }),
   ]);
 
   // Omzet — rolling vensters
   // Omzet uit rm_werkbon.opbrengsten (AT_KLNTBREG per bon, 100% dekking)
-  // rm_journaal is niet gesyncet voor MAINTENANCE
   type OmzetRow = { som: string | null };
-  const [omzetWeek, omzetMaand, omzetJaar, omzetVorigeMaand] = await Promise.all([
+  const [omzetWeek, omzetMaand, omzetJaar, omzetVorigeM] = await Promise.all([
     db.$queryRaw<OmzetRow[]>`
       SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
-      WHERE database::text = ${database} AND opbrengsten > 0 AND datum >= ${dag7}
-    `,
-    db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
-      WHERE database::text = ${database} AND opbrengsten > 0 AND datum >= ${dag30}
-    `,
-    db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
-      WHERE database::text = ${database} AND opbrengsten > 0 AND datum >= ${startJaar}
+      WHERE database::text = ${database} AND opbrengsten > 0
+        AND datum >= ${voorWkStart} AND datum < ${voorWkEind}
     `,
     db.$queryRaw<OmzetRow[]>`
       SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
       WHERE database::text = ${database} AND opbrengsten > 0
-      AND datum >= ${dag30v} AND datum < ${dag30}
+        AND datum >= ${voorMdStart} AND datum < ${voorMdEind}
+    `,
+    db.$queryRaw<OmzetRow[]>`
+      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
+      WHERE database::text = ${database} AND opbrengsten > 0
+        AND datum >= ${startJaar}
+    `,
+    db.$queryRaw<OmzetRow[]>`
+      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
+      WHERE database::text = ${database} AND opbrengsten > 0
+        AND datum >= ${voorMdStart} AND datum < ${voorMdEind}
     `,
   ]);
 
-  // Top klanten (laatste 30 dagen)
+  // Top klanten (vorige maand)
   const topKlanten = await db.rmWerkbon.groupBy({
     by:      ["klant"],
-    where:   { database: database as never, datum: { gte: dag30 } },
+    where:   { database: database as never, datum: { gte: voorMdStart, lt: voorMdEind } },
     _count:  { bonnummer: true },
     orderBy: { _count: { bonnummer: "desc" } },
     take:    10,
@@ -66,18 +79,18 @@ export async function GET(req: NextRequest) {
 
   return Response.json({
     periode: {
-      week7:      dag7.toISOString().slice(0, 10),
-      dag30:      dag30.toISOString().slice(0, 10),
-      jaar:       startJaar.toISOString().slice(0, 10),
-      weekLabel:  "Afgelopen 7 dagen",
-      maandLabel: "Afgelopen 30 dagen",
+      weekStart:  voorWkStart.toISOString().slice(0, 10),
+      maandStart: voorMdStart.toISOString().slice(0, 10),
+      jaarStart:  startJaar.toISOString().slice(0, 10),
+      weekLabel:  "Vorige week",
+      maandLabel: "Vorige maand",
     },
     werkbonnen: { totaal, openstaand, uitgevoerd, weekBons, maandBons },
     omzet: {
       week:        safe(omzetWeek[0]?.som),
       maand:       safe(omzetMaand[0]?.som),
       jaar:        safe(omzetJaar[0]?.som),
-      vorigeMaand: safe(omzetVorigeMaand[0]?.som),
+      vorigeMaand: safe(omzetVorigeM[0]?.som),
     },
     topKlanten: topKlanten.map(k => ({
       klant: k.klant ?? "Onbekend",

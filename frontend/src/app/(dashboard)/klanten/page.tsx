@@ -147,6 +147,9 @@ function MaintenanceKlantenInner() {
           <p className="text-sm text-muted-foreground">
             {isLoading ? "Laden…" : `${allGroepen.length} klantgroepen · ${totaal400.toLocaleString("nl-NL")} werkbonnen (400-contracten)`}
           </p>
+          <p className="text-[11px] text-muted-foreground/70">
+            vWk = vorige kalenderweek (ma–zo) · vMd = vorige kalendermaand · Jaar = YTD · op boekdatum
+          </p>
         </div>
         <input
           type="search" placeholder="Zoek klantgroep of locatie…" value={search}
@@ -161,8 +164,8 @@ function MaintenanceKlantenInner() {
             <thead className="bg-muted/40 border-b">
               <tr>
                 <Th>Klantgroep</Th>
-                <Th right>Wk O</Th><Th right>Wk U</Th>
-                <Th right>Md O</Th><Th right>Md U</Th>
+                <Th right>vWk O</Th><Th right>vWk U</Th>
+                <Th right>vMd O</Th><Th right>vMd U</Th>
                 <Th right>Jaar U</Th><Th right>Jaar O</Th>
                 <Th right>Totaal</Th>
                 <Th>{""}</Th>
