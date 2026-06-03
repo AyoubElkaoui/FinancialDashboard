@@ -40,6 +40,9 @@ export async function GET(req: NextRequest) {
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
 
+  // Bedrijfsstart — data vóór deze datum is leeg/niet relevant
+  const BEDRIJF_START = new Date("2026-04-06");
+
   // Periode-grenzen:
   //   Vorige week: date_trunc('week', today) - 7d  →  date_trunc('week', today)
   //   Vorige maand: date_trunc('month', today) - 1m →  date_trunc('month', today)
@@ -66,6 +69,7 @@ export async function GET(req: NextRequest) {
     FROM rm_werkbon
     WHERE database::text = ${database}
       AND werk_code LIKE '400%'
+      AND datum >= ${BEDRIJF_START}
     GROUP BY werk_code, klant, status
     ORDER BY werk_code, klant, status
   `.catch(() => [] as Row[]);

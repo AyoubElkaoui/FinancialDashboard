@@ -3,6 +3,9 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import type { Database, Prisma } from "@prisma/client";
 
+// Bedrijfsstart Elmar Maintenance — alle data vóór deze datum is leeg/niet relevant
+const BEDRIJF_START = new Date("2026-04-06");
+
 const STATUS_LABEL: Record<string, string> = {
   A: "Aangemaakt", I: "In uitvoering", U: "Uitgevoerd", V: "Voltoooid",
 };
@@ -34,9 +37,11 @@ export async function GET(req: NextRequest) {
 
   if (eigenaar) where.eigenaar = { contains: eigenaar, mode: "insensitive" };
 
+  // Standaard: alleen bonnen vanaf bedrijfsstart (6-4-2026); gebruiker kan overschrijven via dateFrom
   if (dateFrom && dateTo)   where.datum = { gte: new Date(dateFrom), lte: new Date(dateTo) };
   else if (dateFrom)        where.datum = { gte: new Date(dateFrom) };
-  else if (dateTo)          where.datum = { lte: new Date(dateTo) };
+  else if (dateTo)          where.datum = { gte: BEDRIJF_START, lte: new Date(dateTo) };
+  else                      where.datum = { gte: BEDRIJF_START };
 
   if (search) {
     where.OR = [

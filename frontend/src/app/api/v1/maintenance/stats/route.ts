@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
-  const database = req.nextUrl.searchParams.get("database") ?? "MAINTENANCE";
+  const database    = req.nextUrl.searchParams.get("database") ?? "MAINTENANCE";
+  const BEDRIJF_START = new Date("2026-04-06"); // data vóór deze datum is leeg/niet relevant
 
   // Periode-grenzen (besluit Ayoub 2026-06-03: vorige kalenderweek/maand):
   //   Vorige week: date_trunc('week', today) - 7d → date_trunc('week', today)
@@ -35,9 +36,9 @@ export async function GET(req: NextRequest) {
   const startJaar    = new Date(p.jaar_start);
 
   const [totaal, openstaand, uitgevoerd, weekBons, maandBons] = await Promise.all([
-    db.rmWerkbon.count({ where: { database: database as never } }),
-    db.rmWerkbon.count({ where: { database: database as never, status: { in: ["A","I"] } } }),
-    db.rmWerkbon.count({ where: { database: database as never, status: { in: ["U","V"] } } }),
+    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: BEDRIJF_START } } }),
+    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: BEDRIJF_START }, status: { in: ["A","I"] } } }),
+    db.rmWerkbon.count({ where: { database: database as never, datum: { gte: BEDRIJF_START }, status: { in: ["U","V"] } } }),
     db.rmWerkbon.count({ where: { database: database as never, datum: { gte: voorWkStart, lt: voorWkEind } } }),
     db.rmWerkbon.count({ where: { database: database as never, datum: { gte: voorMdStart, lt: voorMdEind } } }),
   ]);

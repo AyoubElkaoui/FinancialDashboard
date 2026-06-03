@@ -10,6 +10,7 @@ import { getSession } from "@/lib/session";
 
 const safe = (v: string | null | undefined) => parseFloat(v ?? "0") || 0;
 const MAAND_NL = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+const BEDRIJF_START = "2026-04-06"; // data vóór deze datum uitsluiten
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
       FROM rm_werkbon
       WHERE database::text = ${database}
         AND opbrengsten > 0
-        AND datum >= CURRENT_DATE - INTERVAL '12 months'
+        AND datum >= ${BEDRIJF_START}::date
       GROUP BY jaar, maand
       ORDER BY jaar, maand
     `.catch(() => []);
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
              status, COUNT(*)::text          AS aantal
       FROM rm_werkbon
       WHERE database::text = ${database}
-        AND datum >= CURRENT_DATE - INTERVAL '12 months'
+        AND datum >= ${BEDRIJF_START}::date
       GROUP BY jaar, maand, status
       ORDER BY jaar, maand, status
     `.catch(() => []);
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
     FROM rm_werkbon
     WHERE database::text = ${database}
       AND opbrengsten > 0
-      AND datum >= ${twaalf_weken_geleden}
+      AND datum >= ${BEDRIJF_START}::date
     GROUP BY jaar, week
     ORDER BY jaar, week
   `.catch(() => []);
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
            status, COUNT(*)::text         AS aantal
     FROM rm_werkbon
     WHERE database::text = ${database}
-      AND datum >= ${twaalf_weken_geleden}
+      AND datum >= ${BEDRIJF_START}::date
     GROUP BY jaar, week, status
     ORDER BY jaar, week, status
   `.catch(() => []);
