@@ -54,8 +54,8 @@ function MaintenanceOmzetPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Afg. 7 dagen",     value: formatCurrency(safeNum(huidigWeek?.omzet)) },
-          { label: "Afg. 30 dagen",    value: formatCurrency(safeNum(huidigMaand?.omzet)) },
+          { label: "Vorige week",       value: formatCurrency(safeNum(huidigWeek?.omzet)) },
+          { label: "Vorige maand",      value: formatCurrency(safeNum(huidigMaand?.omzet)) },
           { label: "12 weken totaal",  value: formatCurrency(weekTotaal) },
           { label: "12 maanden totaal", value: formatCurrency(maandTotaal) },
         ].map(c => (

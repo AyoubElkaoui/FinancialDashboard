@@ -1,180 +1,155 @@
 /**
- * Klantgroepen Maintenance — gebaseerd op contractcode (AT_WERK.GC_CODE).
- * Alleen 400-reeks werkbonnen. Periode >= BEDRIJFSSTART.
- * Retourneert per klantgroep: status-buckets + techniek-breakdown + omzet.
+ * Klantgroepen Maintenance — Excel-tabblad-stijl.
+ * Per klantgroep: totalen + techniek-breakdown per week/jaar + omzet.
+ * Periode >= BEDRIJFSSTART, alleen 400-contracten.
  */
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { resolveKlantgroep } from "@/config/maintenance-klantgroep-mapping";
-import { resolveTechniek, TECHNIEK_VOLGORDE } from "@/config/maintenance-techniek-mapping";
+import { resolveTechniek } from "@/config/maintenance-techniek-mapping";
 import { MAINTENANCE_START_DATE } from "@/config/maintenance-constants";
 import type { Familie } from "@/config/maintenance-klantgroep-mapping";
 
-// ── Hulpfuncties ───────────────────────────────────────────────────────────
+interface ExBuckets { aangemaakt: number; uitgevoerd: number; openstaand: number; totaal: number; }
+const empty = (): ExBuckets => ({ aangemaakt: 0, uitgevoerd: 0, openstaand: 0, totaal: 0 });
 
-function open(s: string)  { return ["A","I"].includes(s); }
-function uitg(s: string)  { return ["U","V"].includes(s); }
-function aanm(s: string)  { return s === "A"; }
-function inbeh(s: string) { return s === "I"; }
+interface TechPeriodes { all: ExBuckets; jaar: ExBuckets; week: ExBuckets; }
+const emptyTP = (): TechPeriodes => ({ all: empty(), jaar: empty(), week: empty() });
 
-interface Buckets { aangemaakt: number; openstaand: number; uitgevoerd: number; totaal: number; }
-const emptyB = (): Buckets => ({ aangemaakt: 0, openstaand: 0, uitgevoerd: 0, totaal: 0 });
+type TechKey = 'W' | 'E' | 'CV' | 'B' | 'Overig';
+interface TechniekMap { W: TechPeriodes; E: TechPeriodes; CV: TechPeriodes; B: TechPeriodes; Overig: TechPeriodes; }
+const emptyTech = (): TechniekMap => ({ W: emptyTP(), E: emptyTP(), CV: emptyTP(), B: emptyTP(), Overig: emptyTP() });
 
-interface TechniekBuckets { W: Buckets; E: Buckets; CV: Buckets; B: Buckets; Overig: Buckets; }
-const emptyT = (): TechniekBuckets => ({
-  W: emptyB(), E: emptyB(), CV: emptyB(), B: emptyB(), Overig: emptyB(),
-});
+interface LocRij { klant: string; werkCode: string; all: ExBuckets; }
 
-interface KlantgroepRow {
+export interface KlantgroepBlok {
   klantgroep: string; familie: Familie;
-  all: Buckets; week: Buckets; jaar: Buckets;
-  techniek: TechniekBuckets;
-  omzet: { periodiek: number; service: number; week: number };
-  locaties: { klant: string; werkCode: string; all: Buckets }[];
+  all:  ExBuckets; jaar: ExBuckets; week: ExBuckets;
+  techniek: TechniekMap;
+  omzet: { periodiek: number; service: number; week: number; };
+  locaties: LocRij[];
 }
 
-// ── Route ──────────────────────────────────────────────────────────────────
+export interface KlantenApiResponse {
+  klantgroepen: KlantgroepBlok[];
+  periodes: { start: string; weekStart: string; weekEind: string; };
+}
+
+function add(b: ExBuckets, status: string, n: number) {
+  b.totaal += n;
+  if (status === 'A') { b.aangemaakt += n; }
+  if (status === 'I') { b.openstaand += n; }
+  if (status === 'U' || status === 'V') { b.uitgevoerd += n; }
+}
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
-  const START = MAINTENANCE_START_DATE;
+  const START    = MAINTENANCE_START_DATE;
 
-  // Vorige volledige week grenzen (Postgres date_trunc)
-  type WeekRow = { wk_start: Date; wk_end: Date };
-  const weekRes = await db.$queryRaw<WeekRow[]>`
-    SELECT
-      (date_trunc('week', CURRENT_DATE) - INTERVAL '7 days')::date AS wk_start,
-      date_trunc('week', CURRENT_DATE)::date                        AS wk_end
+  // Periode-grenzen (vorige volledige kalenderweek)
+  type WR = { wk_start: Date; wk_end: Date };
+  const wr = await db.$queryRaw<WR[]>`
+    SELECT (date_trunc('week', CURRENT_DATE) - INTERVAL '7 days')::date AS wk_start,
+            date_trunc('week', CURRENT_DATE)::date                        AS wk_end
   `;
-  const wkStart = new Date(weekRes[0].wk_start);
-  const wkEnd   = new Date(weekRes[0].wk_end);
+  const wkStart   = new Date(wr[0].wk_start);
+  const wkEnd     = new Date(wr[0].wk_end);
   const jaarStart = new Date(new Date().getFullYear(), 0, 1);
 
-  // Werkbonnen per (werkCode, klant, taakCode, status) + periodes
-  type BonRow = {
-    werk_code: string; klant: string; taak_code: string | null; status: string;
-    totaal: string; is_week: string; is_jaar: string;
-  };
-  const bonRows = await db.$queryRaw<BonRow[]>`
-    SELECT
-      werk_code,
-      COALESCE(klant,'') AS klant,
-      taak_code,
-      status,
-      COUNT(*)::text AS totaal,
-      SUM(CASE WHEN datum >= ${wkStart} AND datum < ${wkEnd} THEN 1 ELSE 0 END)::text AS is_week,
-      SUM(CASE WHEN datum >= ${jaarStart} THEN 1 ELSE 0 END)::text AS is_jaar
+  // Werkbonnen per (werkCode, klant, taakCode, status) + periode-vlaggen
+  type BR = { werk_code: string; klant: string; taak_code: string | null; status: string;
+              totaal: string; is_week: string; is_jaar: string; };
+  const bonRows = await db.$queryRaw<BR[]>`
+    SELECT werk_code, COALESCE(klant,'') AS klant, taak_code, status,
+           COUNT(*)::text AS totaal,
+           SUM(CASE WHEN datum >= ${wkStart} AND datum < ${wkEnd}  THEN 1 ELSE 0 END)::text AS is_week,
+           SUM(CASE WHEN datum >= ${jaarStart}                      THEN 1 ELSE 0 END)::text AS is_jaar
     FROM rm_werkbon
     WHERE database::text = ${database}
       AND werk_code LIKE '400%'
       AND datum >= ${START}
     GROUP BY werk_code, klant, taak_code, status
     ORDER BY werk_code, klant, taak_code, status
-  `.catch(() => [] as BonRow[]);
+  `.catch(() => [] as BR[]);
 
-  // Omzet per klantgroep (rm_journaal 8020+8300)
-  type OmzetRow = { project_nr: string; rubriek_code: string; omzet: string; week_omzet: string };
-  const omzetRows = await db.$queryRaw<OmzetRow[]>`
-    SELECT
-      project_nr,
-      rubriek_code,
-      SUM(bedrag)::text AS omzet,
-      SUM(CASE WHEN datum >= ${wkStart} AND datum < ${wkEnd} THEN bedrag ELSE 0 END)::text AS week_omzet
+  // Omzet per contractcode (8020+8300)
+  type OR = { project_nr: string; rubriek_code: string; omzet: string; week_omzet: string; };
+  const omzetRows = await db.$queryRaw<OR[]>`
+    SELECT project_nr, rubriek_code,
+           SUM(bedrag)::text AS omzet,
+           SUM(CASE WHEN datum >= ${wkStart} AND datum < ${wkEnd} THEN bedrag ELSE 0 END)::text AS week_omzet
     FROM rm_journaal
     WHERE database::text = ${database}
       AND debet_credit   = 'C'
       AND rubriek_code   IN ('8020','8300')
       AND datum >= ${START}
     GROUP BY project_nr, rubriek_code
-  `.catch(() => [] as OmzetRow[]);
+  `.catch(() => [] as OR[]);
 
-  // Bouw klantgroep-map
-  const kgMap = new Map<string, KlantgroepRow>();
-  const locMap = new Map<string, { klant: string; werkCode: string; all: Buckets }>();
-
-  const add = (b: Buckets, s: string, n: number) => {
-    b.totaal += n;
-    if (aanm(s))  b.aangemaakt += n;
-    if (inbeh(s)) b.openstaand += n;
-    if (open(s))  b.openstaand += n;
-    if (uitg(s))  b.uitgevoerd += n;
-  };
-  // aangemaakt en openstaand apart voor de tabel:
-  const addExact = (b: Buckets, s: string, n: number) => {
-    b.totaal += n;
-    if (s === 'A') b.aangemaakt += n;
-    if (s === 'I') b.openstaand += n;
-    if (uitg(s))   b.uitgevoerd += n;
-  };
+  // Aggregeer
+  const kgMap  = new Map<string, KlantgroepBlok>();
+  const locMap = new Map<string, LocRij>();
 
   for (const r of bonRows) {
     const n  = parseInt(r.totaal);
     const nW = parseInt(r.is_week);
     const nJ = parseInt(r.is_jaar);
     const { klantgroep, familie } = resolveKlantgroep(r.werk_code);
-    const tech = resolveTechniek(r.taak_code);
-    const locKey = `${klantgroep}||${r.werk_code}||${r.klant}`;
+    const tech = resolveTechniek(r.taak_code) as TechKey;
 
     if (!kgMap.has(klantgroep)) {
-      kgMap.set(klantgroep, {
-        klantgroep, familie,
-        all:      emptyB(), week: emptyB(), jaar: emptyB(),
-        techniek: emptyT(),
-        omzet:    { periodiek: 0, service: 0, week: 0 },
+      kgMap.set(klantgroep, { klantgroep, familie,
+        all: empty(), jaar: empty(), week: empty(),
+        techniek: emptyTech(),
+        omzet: { periodiek: 0, service: 0, week: 0 },
         locaties: [],
       });
     }
     const kg = kgMap.get(klantgroep)!;
-    addExact(kg.all,  r.status, n);
-    addExact(kg.week, r.status, nW);
-    addExact(kg.jaar, r.status, nJ);
-    addExact(kg.techniek[tech], r.status, n);
+    add(kg.all,  r.status, n);
+    add(kg.jaar, r.status, nJ);
+    add(kg.week, r.status, nW);
+    add(kg.techniek[tech].all,  r.status, n);
+    add(kg.techniek[tech].jaar, r.status, nJ);
+    add(kg.techniek[tech].week, r.status, nW);
 
-    if (!locMap.has(locKey)) {
-      locMap.set(locKey, { klant: r.klant, werkCode: r.werk_code, all: emptyB() });
-    }
-    addExact(locMap.get(locKey)!.all, r.status, n);
+    const lk = `${klantgroep}||${r.werk_code}||${r.klant}`;
+    if (!locMap.has(lk)) locMap.set(lk, { klant: r.klant, werkCode: r.werk_code, all: empty() });
+    add(locMap.get(lk)!.all, r.status, n);
   }
 
-  // Koppel omzet aan klantgroepen
-  for (const r of omzetRows) {
-    const { klantgroep } = resolveKlantgroep(r.project_nr);
-    const kg = kgMap.get(klantgroep);
-    if (!kg) continue;
-    const bedrag = parseFloat(r.omzet) || 0;
-    const weekBedrag = parseFloat(r.week_omzet) || 0;
-    if (r.rubriek_code === '8020') { kg.omzet.periodiek += bedrag; kg.omzet.week += weekBedrag; }
-    if (r.rubriek_code === '8300') { kg.omzet.service   += bedrag; kg.omzet.week += weekBedrag; }
+  for (const o of omzetRows) {
+    const { klantgroep } = resolveKlantgroep(o.project_nr);
+    const kg = kgMap.get(klantgroep); if (!kg) continue;
+    const b = parseFloat(o.omzet) || 0;
+    const w = parseFloat(o.week_omzet) || 0;
+    if (o.rubriek_code === '8020') { kg.omzet.periodiek += b; kg.omzet.week += w; }
+    if (o.rubriek_code === '8300') { kg.omzet.service   += b; kg.omzet.week += w; }
   }
 
-  // Koppel locaties
   for (const loc of locMap.values()) {
     const { klantgroep } = resolveKlantgroep(loc.werkCode);
     kgMap.get(klantgroep)?.locaties.push(loc);
   }
-  for (const kg of kgMap.values()) {
-    kg.locaties.sort((a, b) => b.all.totaal - a.all.totaal);
-  }
+  for (const kg of kgMap.values()) kg.locaties.sort((a,b) => b.all.totaal - a.all.totaal);
 
-  // Sorteer op familie volgorde + totaal
-  const FSORT: Record<string, number> = { Bestseller: 0, 'AS Watson': 1, CeX: 2 };
-  const klantgroepen = [...kgMap.values()].sort((a, b) => {
-    const fa = a.familie ? FSORT[a.familie] ?? 3 : 3;
-    const fb = b.familie ? FSORT[b.familie] ?? 3 : 3;
+  const FS: Record<string, number> = { Bestseller: 0, 'AS Watson': 1, CeX: 2 };
+  const klantgroepen = [...kgMap.values()].sort((a,b) => {
+    const fa = a.familie ? FS[a.familie] ?? 3 : 3;
+    const fb = b.familie ? FS[b.familie] ?? 3 : 3;
     return fa !== fb ? fa - fb : b.all.totaal - a.all.totaal;
   });
 
   return Response.json({
     klantgroepen,
     periodes: {
-      start:      START.toISOString().slice(0, 10),
-      weekStart:  wkStart.toISOString().slice(0, 10),
-      weekEind:   wkEnd.toISOString().slice(0, 10),
-      jaarStart:  jaarStart.toISOString().slice(0, 10),
+      start:     START.toISOString().slice(0, 10),
+      weekStart: wkStart.toISOString().slice(0, 10),
+      weekEind:  new Date(wkEnd.getTime() - 86400000).toISOString().slice(0, 10),
     },
-  });
+  } satisfies KlantenApiResponse);
 }

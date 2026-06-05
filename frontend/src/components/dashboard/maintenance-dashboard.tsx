@@ -136,25 +136,25 @@ export function MaintenanceDashboard() {
           <StatCard
             label="Bons vorige week"
             value={statsLoading ? "—" : String(stats?.werkbonnen.weekBons ?? 0)}
-            sub={stats?.periode.weekLabel ?? "Vorige week"}
+            sub="Vorige kalenderweek"
             icon={Wrench} color="slate"
           />
           <StatCard
             label="Bons vorige maand"
             value={statsLoading ? "—" : String(stats?.werkbonnen.maandBons ?? 0)}
-            sub={stats?.periode.maandLabel ?? "Vorige maand"}
+            sub="Vorige kalendermaand"
             icon={Wrench} color="blue"
           />
           <StatCard
             label="Omzet vorige week"
             value={statsLoading ? "—" : formatCurrency(stats?.omzet.week ?? 0)}
-            sub={stats?.periode.weekLabel ?? "Vorige week"}
+            sub="Vorige kalenderweek"
             icon={TrendingUp} color="green"
           />
           <StatCard
             label="Omzet vorige maand"
             value={statsLoading ? "—" : formatCurrency(stats?.omzet.maand ?? 0)}
-            sub={stats?.periode.maandLabel ?? "Vorige maand"}
+            sub="Vorige kalendermaand"
             icon={TrendingUp} color="blue"
           />
         </div>
@@ -257,10 +257,10 @@ export function MaintenanceDashboard() {
                           <span className={k.week.uitg > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.week.uitg || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.maand.open > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.maand.open || "—"}</span>
+                          <span className={(k.maand?.open ?? 0) > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.maand?.open || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.maand.uitg > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.maand.uitg || "—"}</span>
+                          <span className={(k.maand?.uitg ?? 0) > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.maand?.uitg || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">{k.jaar.totaal}</td>
                         <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold">{k.all.totaal}</td>
