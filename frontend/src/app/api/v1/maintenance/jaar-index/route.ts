@@ -1,18 +1,21 @@
 /**
  * Jaaromzet en groei t.o.v. voorgaande jaren — Maintenance.
- * Bron: rm_werkbon.opbrengsten (AT_KLNTBREG per bon, 100% dekking).
+ * Bron: rm_journaal (AT_JOURNAAL + AT_VERKFACT, rubrieken 8020+8300).
+ * Periode-grens: MAINTENANCE_START — geen data van vóór 6-4-2026 tonen.
  */
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { MAINTENANCE_START, OMZET_RUBRIEKEN } from "@/config/maintenance-constants";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
+  const START = MAINTENANCE_START; // "2026-04-06"
 
-  // Jaaromzet uit rm_journaal (8020+8300) + werkbontellingen uit rm_werkbon
+  // Jaaromzet uit rm_journaal (8020+8300, >= bedrijfsstart)
   type JaarRow = { jaar: string; omzet: string | null; bons: string };
   const [jaarOmzet, jaarBons] = await Promise.all([
     db.$queryRaw<{ jaar: string; omzet: string | null }[]>`
@@ -20,8 +23,9 @@ export async function GET(req: NextRequest) {
              SUM(bedrag)::text              AS omzet
       FROM rm_journaal
       WHERE database::text = ${database}
-        AND debet_credit = 'C'
-        AND rubriek_code IN ('8020','8300')
+        AND debet_credit   = 'C'
+        AND rubriek_code   IN ('8020','8300')
+        AND datum >= ${START}::date
       GROUP BY jaar
       ORDER BY jaar DESC
       LIMIT 5
@@ -31,6 +35,7 @@ export async function GET(req: NextRequest) {
              COUNT(*)::text                 AS bons
       FROM rm_werkbon
       WHERE database::text = ${database}
+        AND datum >= ${START}::date
       GROUP BY jaar
       ORDER BY jaar DESC
       LIMIT 5
@@ -45,19 +50,19 @@ export async function GET(req: NextRequest) {
   }));
 
   const jaarStats = jaarRows.map((r, i, arr) => {
-    const omzet    = parseFloat(r.omzet ?? "0") || 0;
+    const omzet      = parseFloat(r.omzet ?? "0") || 0;
     const vorigeOmzet = i < arr.length - 1 ? (parseFloat(arr[i + 1].omzet ?? "0") || 0) : null;
-    const groei    = vorigeOmzet != null && vorigeOmzet > 0
+    const groei      = vorigeOmzet != null && vorigeOmzet > 0
       ? ((omzet - vorigeOmzet) / vorigeOmzet) * 100 : null;
     return {
-      jaar:        parseInt(r.jaar),
+      jaar:       parseInt(r.jaar),
       omzet,
-      werkbonnen:  parseInt(r.bons),
-      pctVsVorig:  groei,   // verwachte veldnaam door jaar-index/page.tsx
+      werkbonnen: parseInt(r.bons),
+      pctVsVorig: groei,
     };
   });
 
-  // Maand-vergelijking: huidig jaar vs vorig jaar
+  // Maand-vergelijking: alleen data >= bedrijfsstart
   const huidigJaar = new Date().getFullYear();
   const vorigJaar  = huidigJaar - 1;
 
@@ -68,8 +73,9 @@ export async function GET(req: NextRequest) {
            SUM(bedrag)::text               AS omzet
     FROM rm_journaal
     WHERE database::text = ${database}
-      AND debet_credit = 'C'
-      AND rubriek_code IN ('8020','8300')
+      AND debet_credit   = 'C'
+      AND rubriek_code   IN ('8020','8300')
+      AND datum >= ${START}::date
       AND EXTRACT(YEAR FROM datum) IN (${huidigJaar}, ${vorigJaar})
     GROUP BY jaar, maand
     ORDER BY jaar, maand

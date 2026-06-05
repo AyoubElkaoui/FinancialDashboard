@@ -39,9 +39,7 @@ export async function GET(req: NextRequest) {
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
-
-  // Bedrijfsstart — data vóór deze datum is leeg/niet relevant
-  const BEDRIJF_START = new Date("2026-04-06");
+  const { MAINTENANCE_START_DATE: BEDRIJF_START } = await import("@/config/maintenance-constants");
 
   // Periode-grenzen:
   //   Vorige week: date_trunc('week', today) - 7d  →  date_trunc('week', today)

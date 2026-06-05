@@ -2,9 +2,9 @@ import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import type { Database, Prisma } from "@prisma/client";
+import { MAINTENANCE_START_DATE } from "@/config/maintenance-constants";
 
-// Bedrijfsstart Elmar Maintenance — alle data vóór deze datum is leeg/niet relevant
-const BEDRIJF_START = new Date("2026-04-06");
+const BEDRIJF_START = MAINTENANCE_START_DATE;
 
 const STATUS_LABEL: Record<string, string> = {
   A: "Aangemaakt", I: "In uitvoering", U: "Uitgevoerd", V: "Voltoooid",

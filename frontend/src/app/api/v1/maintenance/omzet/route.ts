@@ -7,10 +7,11 @@ import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
+import { MAINTENANCE_START, OMZET_RUBRIEKEN } from "@/config/maintenance-constants";
+
 const safe = (v: string | null | undefined) => parseFloat(v ?? "0") || 0;
 const MAAND_NL = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
-const BEDRIJF_START = "2026-04-06";
-const OMZET_RUBRIEKEN = ["8020", "8300"];
+const BEDRIJF_START = MAINTENANCE_START;
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
