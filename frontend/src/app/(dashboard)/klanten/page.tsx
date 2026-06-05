@@ -79,39 +79,52 @@ function KlantenInner() {
   );
 }
 
-// ── Type B: Maintenance klanten op klantgroep-niveau ─────────────────────────
+// ── Type B: Maintenance klanten — Excel-tab stijl per klantgroep ─────────────
 
-interface Buckets { open: number; uitg: number; totaal: number; }
-interface LocatieRow { klant: string; werkCode: string; all: Buckets; week: Buckets; maand: Buckets; jaar: Buckets; }
-interface KlantgroepRow { klantgroep: string; familie: string | null; all: Buckets; week: Buckets; maand: Buckets; jaar: Buckets; locaties: LocatieRow[]; }
-interface KlantenResponse { klantgroepen: KlantgroepRow[] }
+interface ExBuckets {
+  aangemaakt: number; openstaand: number; uitgevoerd: number; totaal: number;
+}
+interface ExTechniek { W: ExBuckets; E: ExBuckets; CV: ExBuckets; B: ExBuckets; Overig: ExBuckets; }
+interface ExLocatie   { klant: string; werkCode: string; all: ExBuckets; }
+interface ExKlantgroep {
+  klantgroep: string; familie: string | null;
+  all: ExBuckets; week: ExBuckets; jaar: ExBuckets;
+  techniek: ExTechniek;
+  omzet: { periodiek: number; service: number; week: number };
+  locaties: ExLocatie[];
+}
+interface ExResponse { klantgroepen: ExKlantgroep[]; periodes: Record<string, string> }
 
-const FAMILIE_KLEUREN: Record<string, string> = {
+const FAMILIE_CLR: Record<string, string> = {
   Bestseller: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   'AS Watson': "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   CeX:        "bg-orange-500/10 text-orange-700 dark:text-orange-400",
 };
+const TECH_KEYS = ['W','E','CV','B','Overig'] as const;
+const TECH_LABEL: Record<string, string> = { W:'W-inst.',E:'Electra',CV:'CV',B:'Bouwk.',Overig:'Overig' };
 
-function BucketCell({ b, field }: { b: Buckets; field: "open" | "uitg" | "totaal" }) {
-  const v = b[field];
-  const cls = v === 0 ? "text-muted-foreground"
-    : field === "open"  ? "text-orange-600 dark:text-orange-400 font-semibold"
-    : field === "uitg"  ? "text-emerald-600 dark:text-emerald-400"
-    :                     "font-semibold";
-  return <td className={`px-3 py-2 text-right tabular-nums text-xs ${cls}`}>{v || "—"}</td>;
+function Num({ v, orange, green, grey }: { v: number; orange?: boolean; green?: boolean; grey?: boolean }) {
+  const cls = v === 0 ? "text-muted-foreground/50"
+    : orange ? "text-orange-600 dark:text-orange-400 font-semibold"
+    : green  ? "text-emerald-600 dark:text-emerald-400"
+    : grey   ? "text-muted-foreground"
+    :          "";
+  return <span className={`tabular-nums text-xs ${cls}`}>{v || "—"}</span>;
 }
 
 function MaintenanceKlantenInner() {
-  const [search, setSearch]   = useState("");
+  const [search,   setSearch]   = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showTech, setShowTech] = useState(false);
 
-  const { data, isLoading } = useQuery<KlantenResponse>({
-    queryKey: ["maintenance", "klanten-groepen"],
+  const { data, isLoading } = useQuery<ExResponse>({
+    queryKey: ["maintenance", "klanten-excel"],
     queryFn:  () => fetch("/api/v1/maintenance/klanten?database=MAINTENANCE").then(r => r.json()),
     staleTime: 120_000,
   });
 
-  const allGroepen = data?.klantgroepen ?? [];
+  const allGroepen  = data?.klantgroepen ?? [];
+  const periodes    = data?.periodes ?? {};
   const klantgroepen = search
     ? allGroepen.filter(kg =>
         kg.klantgroep.toLowerCase().includes(search.toLowerCase()) ||
@@ -122,123 +135,148 @@ function MaintenanceKlantenInner() {
   const toggle = (key: string) =>
     setExpanded(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  // Groepeer klantgroepen per familie
-  const familieGroepen = new Map<string | null, KlantgroepRow[]>();
+  // Familie-groepering
+  const famMap = new Map<string | null, ExKlantgroep[]>();
   for (const kg of klantgroepen) {
-    const f = kg.familie;
-    if (!familieGroepen.has(f)) familieGroepen.set(f, []);
-    familieGroepen.get(f)!.push(kg);
+    if (!famMap.has(kg.familie)) famMap.set(kg.familie, []);
+    famMap.get(kg.familie)!.push(kg);
   }
-  const FAMILIE_VOLGORDE = ['Bestseller', 'AS Watson', 'CeX', null];
+  const FAM_VOLGORDE = ['Bestseller','AS Watson','CeX', null];
 
-  const Th = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
-    <th className={`px-3 py-2.5 text-xs font-semibold text-muted-foreground whitespace-nowrap ${right ? "text-right" : "text-left"}`}>
-      {children}
+  const tot400 = allGroepen.reduce((s, kg) => s + kg.all.totaal, 0);
+  const totOmzet = allGroepen.reduce((s, kg) => s + kg.omzet.periodiek + kg.omzet.service, 0);
+
+  const Th = ({ ch, right, grey }: { ch: string; right?: boolean; grey?: boolean }) => (
+    <th className={`px-2 py-2 text-[10px] font-semibold whitespace-nowrap border-l border-muted/30 ${right?"text-right":"text-left"} ${grey?"text-muted-foreground/60":"text-muted-foreground"}`}>
+      {ch}
     </th>
   );
 
-  const totaal400 = allGroepen.reduce((s, kg) => s + kg.all.totaal, 0);
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Klanten</h1>
           <p className="text-sm text-muted-foreground">
-            {isLoading ? "Laden…" : `${allGroepen.length} klantgroepen · ${totaal400} werkbonnen (400-contracten)`}
+            {isLoading ? "Laden…" : `${allGroepen.length} klantgroepen · ${tot400} bons · ${formatCurrency(totOmzet)} omzet YTD`}
           </p>
-          <p className="text-[11px] text-muted-foreground/70">
-            vWk = vorige kalenderweek (ma–zo) · vMd = vorige kalendermaand · Jaar = YTD · op boekdatum
+          <p className="text-[11px] text-muted-foreground/60">
+            vWk = vorige week ({periodes.weekStart}–{periodes.weekEind}) · Jaar = YTD vanaf {periodes.start}
           </p>
         </div>
-        <input
-          type="search" placeholder="Zoek klantgroep of locatie…" value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="h-9 w-72 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTech(v => !v)}
+            className={`h-8 px-3 rounded-md border text-xs font-medium transition-colors ${showTech ? "bg-blue-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
+          >
+            Techniek
+          </button>
+          <input
+            type="search" placeholder="Zoek klantgroep of locatie…" value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="h-8 w-60 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
       </div>
 
+      {/* Excel-stijl tabel */}
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[780px]">
+          <table className="w-full text-xs" style={{ minWidth: showTech ? 960 : 680 }}>
             <thead className="bg-muted/40 border-b">
               <tr>
-                <Th>Klantgroep</Th>
-                <Th right>vWk O</Th><Th right>vWk U</Th>
-                <Th right>vMd O</Th><Th right>vMd U</Th>
-                <Th right>Jaar U</Th><Th right>Jaar O</Th>
-                <Th right>Totaal</Th>
-                <Th>{""}</Th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground w-44">Klantgroep</th>
+                {/* Jaar-kolommen */}
+                <Th ch="Jaar A" right grey />
+                <Th ch="Jaar U" right />
+                <Th ch="Jaar O" right grey />
+                {/* Week-kolommen */}
+                <Th ch="vWk A" right grey />
+                <Th ch="vWk U" right />
+                <Th ch="vWk O" right grey />
+                {/* Techniek (optioneel) */}
+                {showTech && TECH_KEYS.map(t => <Th key={t} ch={TECH_LABEL[t]} right grey />)}
+                {/* Omzet */}
+                <Th ch="Periodiek" right />
+                <Th ch="Service" right />
+                <Th ch="vWk omzet" right grey />
+                <th className="w-6" />
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">Laden…</td></tr>
+                <tr><td colSpan={20} className="py-10 text-center text-muted-foreground">Laden…</td></tr>
               ) : klantgroepen.length === 0 ? (
-                <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">Geen klantgroepen gevonden</td></tr>
-              ) : FAMILIE_VOLGORDE.flatMap(fam => {
-                const groepen = familieGroepen.get(fam) ?? [];
+                <tr><td colSpan={20} className="py-10 text-center text-muted-foreground">Geen resultaten</td></tr>
+              ) : FAM_VOLGORDE.flatMap(fam => {
+                const groepen = famMap.get(fam) ?? [];
                 if (groepen.length === 0) return [];
                 const rows = [];
 
-                // Familie-header (alleen als er een naam is)
+                // Familie-header
                 if (fam) {
+                  const famTot = groepen.reduce((s, g) => s + g.all.totaal, 0);
+                  const famOmz = groepen.reduce((s, g) => s + g.omzet.periodiek + g.omzet.service, 0);
                   rows.push(
                     <tr key={`fam-${fam}`} className="bg-muted/20 border-b">
-                      <td colSpan={9} className="px-4 py-2">
-                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${FAMILIE_KLEUREN[fam] ?? ""}`}>
-                          {fam}
-                        </span>
-                        <span className="ml-2 text-[11px] text-muted-foreground">
-                          {groepen.reduce((s, g) => s + g.all.totaal, 0)} werkbonnen · {groepen.length} groepen
-                        </span>
+                      <td colSpan={20} className="px-3 py-1.5 flex items-center gap-3">
+                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${FAMILIE_CLR[fam] ?? ""}`}>{fam}</span>
+                        <span className="text-[11px] text-muted-foreground">{famTot} bons · {formatCurrency(famOmz)}</span>
                       </td>
                     </tr>
                   );
                 }
 
-                // Klantgroepen binnen deze familie
                 for (const kg of groepen) {
                   const isOpen = expanded.has(kg.klantgroep);
                   rows.push(
-                    <tr key={kg.klantgroep} className="border-b hover:bg-muted/30 cursor-pointer"
+                    <tr key={kg.klantgroep}
+                        className={`border-b cursor-pointer hover:bg-muted/20 ${isOpen ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}`}
                         onClick={() => toggle(kg.klantgroep)}>
-                      <td className="px-3 py-2.5 font-semibold text-sm flex items-center gap-2">
-                        <span className={`text-muted-foreground text-[10px] transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
-                        {kg.klantgroep}
+                      <td className="px-3 py-2 font-semibold flex items-center gap-1.5">
+                        <span className={`text-muted-foreground text-[9px] ${isOpen ? "rotate-90 inline-block" : ""}`}>▶</span>
+                        <span className="truncate max-w-[160px]" title={kg.klantgroep}>{kg.klantgroep}</span>
                       </td>
-                      <BucketCell b={kg.week}  field="open" />
-                      <BucketCell b={kg.week}  field="uitg" />
-                      <BucketCell b={kg.maand} field="open" />
-                      <BucketCell b={kg.maand} field="uitg" />
-                      <BucketCell b={kg.jaar}  field="uitg" />
-                      <BucketCell b={kg.jaar}  field="open" />
-                      <td className="px-3 py-2 text-right tabular-nums text-xs font-bold">{kg.all.totaal}</td>
+                      {/* Jaar */}
+                      <td className="px-2 py-2 text-right border-l border-muted/20"><Num v={kg.jaar.aangemaakt} grey /></td>
+                      <td className="px-2 py-2 text-right border-l border-muted/20"><Num v={kg.jaar.uitgevoerd} green /></td>
+                      <td className="px-2 py-2 text-right border-l border-muted/20"><Num v={kg.jaar.openstaand} orange /></td>
+                      {/* Week */}
+                      <td className="px-2 py-2 text-right border-l border-muted/30"><Num v={kg.week.aangemaakt} grey /></td>
+                      <td className="px-2 py-2 text-right border-l border-muted/20"><Num v={kg.week.uitgevoerd} green /></td>
+                      <td className="px-2 py-2 text-right border-l border-muted/20"><Num v={kg.week.openstaand} orange /></td>
+                      {/* Techniek */}
+                      {showTech && TECH_KEYS.map(t => (
+                        <td key={t} className="px-2 py-2 text-right border-l border-muted/20 text-muted-foreground">
+                          {kg.techniek[t]?.totaal || "—"}
+                        </td>
+                      ))}
+                      {/* Omzet */}
+                      <td className="px-2 py-2 text-right border-l border-muted/30 font-medium">{formatCurrency(kg.omzet.periodiek)}</td>
+                      <td className="px-2 py-2 text-right">{formatCurrency(kg.omzet.service)}</td>
+                      <td className="px-2 py-2 text-right text-muted-foreground">{formatCurrency(kg.omzet.week)}</td>
                       <td />
                     </tr>
                   );
 
-                  // Expandable locaties
+                  // Uitklapbaar: locaties
                   if (isOpen) {
-                    const filteredLocs = search
+                    const locs = search
                       ? kg.locaties.filter(l => l.klant.toLowerCase().includes(search.toLowerCase()))
                       : kg.locaties;
-                    for (const loc of filteredLocs) {
+                    for (const loc of locs) {
                       rows.push(
                         <tr key={`${kg.klantgroep}-${loc.werkCode}-${loc.klant}`}
-                            className="border-b border-dashed bg-muted/5 hover:bg-muted/10">
-                          <td className="pl-10 pr-3 py-1.5 text-xs text-muted-foreground max-w-[260px] truncate" title={loc.klant}>
-                            <span className="font-mono text-[10px] bg-muted px-1 rounded mr-1.5">{loc.werkCode}</span>
+                            className="border-b border-dashed bg-muted/5">
+                          <td className="pl-8 pr-2 py-1.5 text-muted-foreground truncate max-w-[200px]" title={loc.klant}>
+                            <span className="font-mono text-[9px] bg-muted px-1 rounded mr-1">{loc.werkCode}</span>
                             {loc.klant || "Onbekend"}
                           </td>
-                          <BucketCell b={loc.week}  field="open" />
-                          <BucketCell b={loc.week}  field="uitg" />
-                          <BucketCell b={loc.maand} field="open" />
-                          <BucketCell b={loc.maand} field="uitg" />
-                          <BucketCell b={loc.jaar}  field="uitg" />
-                          <BucketCell b={loc.jaar}  field="open" />
-                          <td className="px-3 py-1.5 text-right tabular-nums text-xs text-muted-foreground">{loc.all.totaal}</td>
-                          <td />
+                          <td className="px-2 py-1.5 text-right text-muted-foreground/70">{loc.all.aangemaakt || "—"}</td>
+                          <td className="px-2 py-1.5 text-right text-muted-foreground/70">{loc.all.uitgevoerd || "—"}</td>
+                          <td className="px-2 py-1.5 text-right text-muted-foreground/70">{loc.all.openstaand || "—"}</td>
+                          <td colSpan={showTech ? 4 + TECH_KEYS.length : 4} />
                         </tr>
                       );
                     }

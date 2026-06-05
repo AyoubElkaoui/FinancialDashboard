@@ -127,6 +127,7 @@ model RmWerkbon {
   eigenaar         String?
   werkCode         String?  @map("werk_code")
   isGefactureerd   Boolean  @default(false) @map("is_gefactureerd")
+  taakCode         String?  @map("taak_code")                        // AT_TAAK.GC_CODE -> techniek W/E/CV/B
   // Financiële velden uit DB (sync vult/overschrijft deze)
   opbrengsten      Decimal? @db.Decimal(12, 2)                       // AT_KLNTBREG sum per bon
   urenWerkbon      Decimal? @db.Decimal(10, 2) @map("uren_werkbon")  // AT_URENBREG per bon (23%)
