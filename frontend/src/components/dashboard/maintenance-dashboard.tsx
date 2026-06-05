@@ -52,11 +52,12 @@ interface Stats {
 interface MaandRow  { label: string; jaar: number; maand: number; omzet: number }
 interface WeekRow   { label: string; aangemaakt: number; uitgevoerd: number; openstaand: number }
 
-interface Buckets { open: number; uitg: number; totaal: number; }
+// StandBuckets = nieuwe veldnamen (te_doen/loopt/gedaan/totaal)
+interface StandBuckets { totaal: number; te_doen: number; loopt: number; gedaan: number; }
 interface KlantgroepRow {
   klantgroep: string; familie: string | null;
-  all: Buckets; week: Buckets; maand: Buckets; jaar: Buckets;
-  locaties: { klant: string; werkCode: string; all: Buckets }[];
+  all: StandBuckets; week: StandBuckets; jaar: StandBuckets;
+  locaties: { klant: string; werkCode: string; all: StandBuckets }[];
 }
 interface KlantenResponse { klantgroepen: KlantgroepRow[]; }
 
@@ -238,32 +239,28 @@ export function MaintenanceDashboard() {
                   <thead className="bg-muted/40 border-b">
                     <tr>
                       <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Klantgroep</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vWk O</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vWk U</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vMd O</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">vMd U</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Jaar</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Totaal</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Totaal</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Nog te doen</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-amber-600">Loopt</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-emerald-600">Gedaan</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-foreground">Week gedaan</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(klantenData.klantgroepen ?? []).slice(0, 20).map((k, i) => (
                       <tr key={k.klantgroep} className={`border-b last:border-0 hover:bg-muted/30 ${i % 2 === 1 ? "bg-muted/10" : ""}`}>
                         <td className="px-4 py-2 font-medium text-xs truncate max-w-[200px]" title={k.klantgroep}>{k.klantgroep}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-xs font-bold">{k.jaar?.totaal ?? "—"}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.week.open > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.week.open || "—"}</span>
+                          <span className={(k.jaar?.te_doen ?? 0) > 0 ? "text-slate-600 font-semibold" : "text-muted-foreground"}>{k.jaar?.te_doen || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={k.week.uitg > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.week.uitg || "—"}</span>
+                          <span className={(k.jaar?.loopt ?? 0) > 0 ? "text-amber-600 font-semibold" : "text-muted-foreground"}>{k.jaar?.loopt || "—"}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={(k.maand?.open ?? 0) > 0 ? "text-orange-600 font-semibold" : "text-muted-foreground"}>{k.maand?.open || "—"}</span>
+                          <span className={(k.jaar?.gedaan ?? 0) > 0 ? "text-emerald-600 font-semibold" : "text-muted-foreground"}>{k.jaar?.gedaan || "—"}</span>
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-xs">
-                          <span className={(k.maand?.uitg ?? 0) > 0 ? "text-emerald-600" : "text-muted-foreground"}>{k.maand?.uitg || "—"}</span>
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">{k.jaar.totaal}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold">{k.all.totaal}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">{k.week?.gedaan || "—"}</td>
                       </tr>
                     ))}
                   </tbody>

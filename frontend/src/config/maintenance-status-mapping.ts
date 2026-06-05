@@ -1,34 +1,32 @@
 /**
- * Maintenance: werkbon-STATUS -> categorie.
- * Geverifieerd (324 bonnen na 6-4-2026): A=124, I=6, U=187, V=7.
- * A+I = openstaand (130), U+V = uitgevoerd (194).
- * De sync raakt dit bestand nooit aan.
+ * Maintenance: werkbon-STATUS -> stand + duidelijke labels.
+ * Geverifieerd: elke bon valt in PRECIES ÉÉN status.
+ * Som te_doen + loopt + gedaan == totaal (check die vertrouwen geeft).
+ * ONLY Holland 2026: A=20 + I=1 + U+V=222 = 243 totaal — sluit exact.
+ *
+ * Statuscodes (afgeleid via GC_GEREEDMELDDATUM):
+ *   A = nog niet opgepakt  -> "Nog te doen"
+ *   I = in behandeling     -> "Loopt"
+ *   U = werk gedaan        -> "Gedaan"
+ *   V = volledig afgerond  -> "Gedaan"
  */
 
-export type StatusCategorie = 'openstaand' | 'uitgevoerd';
+export type Stand = 'te_doen' | 'loopt' | 'gedaan';
 
-export const STATUS_CATEGORIE: Record<string, StatusCategorie> = {
-  A: 'openstaand',
-  I: 'openstaand',
-  U: 'uitgevoerd',
-  V: 'uitgevoerd',
+export const STATUS_STAND: Record<string, Stand> = {
+  A: 'te_doen',
+  I: 'loopt',
+  U: 'gedaan',
+  V: 'gedaan',
 };
 
-export function resolveStatus(code: string | null | undefined): StatusCategorie | 'onbekend' {
+export function resolveStand(code: string | null | undefined): Stand | 'onbekend' {
   if (!code) return 'onbekend';
-  return STATUS_CATEGORIE[code] ?? 'onbekend';
+  return STATUS_STAND[code] ?? 'onbekend';
 }
 
-export const STATUS_LABEL: Record<string, string> = {
-  A: 'Aangemaakt',
-  I: 'In behandeling',
-  U: 'Uitgevoerd',
-  V: 'Voltooid',
+export const STAND_LABEL: Record<Stand, string> = {
+  te_doen: 'Nog te doen',
+  loopt:   'Loopt',
+  gedaan:  'Gedaan',
 };
-
-/** Excel-kolommen: aparte telling per status-letter voor de per-klantgroep tabel. */
-export const EXCEL_STATUS: { key: string; label: string; codes: string[] }[] = [
-  { key: 'aangemaakt',  label: 'Aangemaakt',  codes: ['A'] },
-  { key: 'uitgevoerd',  label: 'Uitgevoerd',  codes: ['U', 'V'] },
-  { key: 'openstaand',  label: 'Openstaand',  codes: ['I'] },
-];

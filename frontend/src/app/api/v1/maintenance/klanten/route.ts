@@ -1,6 +1,6 @@
 /**
  * Klantgroepen Maintenance — Excel-tabblad-stijl.
- * Per klantgroep: totalen + techniek-breakdown per week/jaar + omzet.
+ * Statussen: A=te_doen, I=loopt, U+V=gedaan. Altijd: te_doen+loopt+gedaan==totaal.
  * Periode >= BEDRIJFSSTART, alleen 400-contracten.
  */
 import type { NextRequest } from "next/server";
@@ -9,48 +9,28 @@ import { getSession } from "@/lib/session";
 import { resolveKlantgroep } from "@/config/maintenance-klantgroep-mapping";
 import { resolveTechniek } from "@/config/maintenance-techniek-mapping";
 import { MAINTENANCE_START_DATE } from "@/config/maintenance-constants";
-import type { Familie } from "@/config/maintenance-klantgroep-mapping";
+import type { StandBuckets, TechBucket, TechniekMap, KlantgroepBlok, KlantenApiResponse } from "@/types/maintenance-klanten";
 
-interface ExBuckets { aangemaakt: number; uitgevoerd: number; openstaand: number; totaal: number; }
-const empty = (): ExBuckets => ({ aangemaakt: 0, uitgevoerd: 0, openstaand: 0, totaal: 0 });
-
-interface TechPeriodes { all: ExBuckets; jaar: ExBuckets; week: ExBuckets; }
-const emptyTP = (): TechPeriodes => ({ all: empty(), jaar: empty(), week: empty() });
+const emptyS = (): StandBuckets => ({ totaal: 0, te_doen: 0, loopt: 0, gedaan: 0 });
+const emptyT = (): TechBucket  => ({ all: emptyS(), jaar: emptyS(), week: emptyS() });
+const emptyTM = (): TechniekMap => ({ W: emptyT(), E: emptyT(), CV: emptyT(), B: emptyT(), Overig: emptyT() });
 
 type TechKey = 'W' | 'E' | 'CV' | 'B' | 'Overig';
-interface TechniekMap { W: TechPeriodes; E: TechPeriodes; CV: TechPeriodes; B: TechPeriodes; Overig: TechPeriodes; }
-const emptyTech = (): TechniekMap => ({ W: emptyTP(), E: emptyTP(), CV: emptyTP(), B: emptyTP(), Overig: emptyTP() });
 
-interface LocRij { klant: string; werkCode: string; all: ExBuckets; }
-
-export interface KlantgroepBlok {
-  klantgroep: string; familie: Familie;
-  all:  ExBuckets; jaar: ExBuckets; week: ExBuckets;
-  techniek: TechniekMap;
-  omzet: { periodiek: number; service: number; week: number; };
-  locaties: LocRij[];
-}
-
-export interface KlantenApiResponse {
-  klantgroepen: KlantgroepBlok[];
-  periodes: { start: string; weekStart: string; weekEind: string; };
-}
-
-function add(b: ExBuckets, status: string, n: number) {
+function add(b: StandBuckets, status: string, n: number) {
   b.totaal += n;
-  if (status === 'A') { b.aangemaakt += n; }
-  if (status === 'I') { b.openstaand += n; }
-  if (status === 'U' || status === 'V') { b.uitgevoerd += n; }
+  if (status === 'A')                       b.te_doen += n;
+  else if (status === 'I')                  b.loopt   += n;
+  else if (status === 'U' || status === 'V') b.gedaan  += n;
 }
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
 
-  const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
+  const database = req.nextUrl.searchParams.get("database") ?? "MAINTENANCE";
   const START    = MAINTENANCE_START_DATE;
 
-  // Periode-grenzen (vorige volledige kalenderweek)
   type WR = { wk_start: Date; wk_end: Date };
   const wr = await db.$queryRaw<WR[]>`
     SELECT (date_trunc('week', CURRENT_DATE) - INTERVAL '7 days')::date AS wk_start,
@@ -60,7 +40,6 @@ export async function GET(req: NextRequest) {
   const wkEnd     = new Date(wr[0].wk_end);
   const jaarStart = new Date(new Date().getFullYear(), 0, 1);
 
-  // Werkbonnen per (werkCode, klant, taakCode, status) + periode-vlaggen
   type BR = { werk_code: string; klant: string; taak_code: string | null; status: string;
               totaal: string; is_week: string; is_jaar: string; };
   const bonRows = await db.$queryRaw<BR[]>`
@@ -73,10 +52,8 @@ export async function GET(req: NextRequest) {
       AND werk_code LIKE '400%'
       AND datum >= ${START}
     GROUP BY werk_code, klant, taak_code, status
-    ORDER BY werk_code, klant, taak_code, status
   `.catch(() => [] as BR[]);
 
-  // Omzet per contractcode (8020+8300)
   type OR = { project_nr: string; rubriek_code: string; omzet: string; week_omzet: string; };
   const omzetRows = await db.$queryRaw<OR[]>`
     SELECT project_nr, rubriek_code,
@@ -90,9 +67,8 @@ export async function GET(req: NextRequest) {
     GROUP BY project_nr, rubriek_code
   `.catch(() => [] as OR[]);
 
-  // Aggregeer
   const kgMap  = new Map<string, KlantgroepBlok>();
-  const locMap = new Map<string, LocRij>();
+  const locSet = new Map<string, { klant: string; werkCode: string; all: StandBuckets }>();
 
   for (const r of bonRows) {
     const n  = parseInt(r.totaal);
@@ -103,8 +79,8 @@ export async function GET(req: NextRequest) {
 
     if (!kgMap.has(klantgroep)) {
       kgMap.set(klantgroep, { klantgroep, familie,
-        all: empty(), jaar: empty(), week: empty(),
-        techniek: emptyTech(),
+        all: emptyS(), jaar: emptyS(), week: emptyS(),
+        techniek: emptyTM(),
         omzet: { periodiek: 0, service: 0, week: 0 },
         locaties: [],
       });
@@ -118,8 +94,8 @@ export async function GET(req: NextRequest) {
     add(kg.techniek[tech].week, r.status, nW);
 
     const lk = `${klantgroep}||${r.werk_code}||${r.klant}`;
-    if (!locMap.has(lk)) locMap.set(lk, { klant: r.klant, werkCode: r.werk_code, all: empty() });
-    add(locMap.get(lk)!.all, r.status, n);
+    if (!locSet.has(lk)) locSet.set(lk, { klant: r.klant, werkCode: r.werk_code, all: emptyS() });
+    add(locSet.get(lk)!.all, r.status, n);
   }
 
   for (const o of omzetRows) {
@@ -131,7 +107,7 @@ export async function GET(req: NextRequest) {
     if (o.rubriek_code === '8300') { kg.omzet.service   += b; kg.omzet.week += w; }
   }
 
-  for (const loc of locMap.values()) {
+  for (const loc of locSet.values()) {
     const { klantgroep } = resolveKlantgroep(loc.werkCode);
     kgMap.get(klantgroep)?.locaties.push(loc);
   }
@@ -151,5 +127,5 @@ export async function GET(req: NextRequest) {
       weekStart: wkStart.toISOString().slice(0, 10),
       weekEind:  new Date(wkEnd.getTime() - 86400000).toISOString().slice(0, 10),
     },
-  } satisfies KlantenApiResponse);
+  } as KlantenApiResponse);
 }
