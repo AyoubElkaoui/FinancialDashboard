@@ -1,13 +1,13 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatPercentage } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, AlertCircle, DatabaseZap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,10 +30,21 @@ interface ProjectRow {
   MARGE_PCT: number;
 }
 
+interface Totals {
+  aanneemsom: number;
+  gefactureerd: number;
+  kosten: number;
+  marge: number;
+}
+
 interface ProjectenResponse {
   data: ProjectRow[];
   total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
   _source: string;
+  _totals?: Totals;
 }
 
 // ─── DB config ────────────────────────────────────────────────────────────────
@@ -53,8 +64,12 @@ const DB_COLORS: Record<string, { dot: string; badge: string }> = {
 };
 
 function margeCls(v: number) {
-  return v >= 15 ? "text-emerald-600 dark:text-emerald-400 font-semibold" : v >= 0 ? "" : "text-red-600 dark:text-red-400 font-semibold";
+  return v >= 15
+    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+    : v >= 0 ? "" : "text-red-600 dark:text-red-400 font-semibold";
 }
+
+const PAGE_SIZE = 100;
 
 // ─── Filter chip ──────────────────────────────────────────────────────────────
 
@@ -63,7 +78,9 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
     <button
       onClick={onClick}
       className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-        active ? "bg-blue-600 text-white border-blue-600" : "border-border text-muted-foreground hover:border-blue-400"
+        active
+          ? "bg-blue-600 text-white border-blue-600"
+          : "border-border text-muted-foreground hover:border-blue-400"
       }`}
     >
       {label}
@@ -77,58 +94,56 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
   const { database } = use(params);
   const router = useRouter();
 
-  const [status, setStatus]       = useState<"actueel" | "historisch">("actueel");
-  const [search, setSearch]       = useState("");
-  const [plFilter, setPlFilter]   = useState("");
+  const [status, setStatus]               = useState<"actueel" | "historisch">("actueel");
+  const [page, setPage]                   = useState(1);
+  const [search, setSearch]               = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce zoekterm — sla pagina terug naar 1
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Status-wijziging → pagina resetten
+  useEffect(() => { setPage(1); }, [status]);
 
   const { data, isLoading, isError } = useQuery<ProjectenResponse>({
-    queryKey: ["mgm-projecten", database, status],
+    queryKey: ["mgm-projecten", database, status, page, debouncedSearch],
     queryFn: () => {
-      const params = new URLSearchParams({
+      const p = new URLSearchParams({
         database,
-        pageSize:   "5000",
+        pageSize:    String(PAGE_SIZE),
+        page:        String(page),
         verbergLeeg: "true",
-        status,      // server-side status filter (actueel/historisch)
+        status,
       });
-      return fetch(`/api/v1/projecten?${params}`)
-        .then(r => {
-          if (!r.ok) throw new Error("Fout bij laden");
-          return r.json();
-        });
+      if (debouncedSearch) p.set("search", debouncedSearch);
+      return fetch(`/api/v1/projecten?${p}`).then(r => {
+        if (!r.ok) throw new Error("Fout bij laden");
+        return r.json();
+      });
     },
+    placeholderData: (prev) => prev,   // behoud vorige data bij pagina-wissel
   });
 
   const label  = DB_LABELS[database] ?? database;
   const colors = DB_COLORS[database];
+  const projecten: ProjectRow[] = data?.data ?? [];
+  const totals = data?._totals;
 
-  // Search + projectleider filter blijven client-side (snel op al geladen data)
-  const projecten: ProjectRow[] = (data?.data ?? []).filter(p => {
-    if (plFilter && !p.PROJECTLEIDER?.toLowerCase().includes(plFilter.toLowerCase())) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        p.NAAM?.toLowerCase().includes(q) ||
-        p.PROJECTNUMMER?.toLowerCase().includes(q) ||
-        p.KLANT?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  // Unieke projectleiders voor filter-dropdown (over gehele geladen dataset)
-  const alleProjectleiders = [...new Set((data?.data ?? []).map(p => p.PROJECTLEIDER).filter(Boolean))].sort();
-
-  // Totals over filtered rows
-  const totAanneemsom  = projecten.reduce((s, p) => s + p.TOTAAL_AANNEEMSOM, 0);
-  const totGefact      = projecten.reduce((s, p) => s + p.GEFACTUREERD_TOTAAL, 0);
-  const totKosten      = projecten.reduce((s, p) => s + p.TOTALE_KOSTEN, 0);
-  const totMarge       = projecten.reduce((s, p) => s + p.BRUTOMARGE, 0);
-  const gemMargePct    = totKosten > 0 ? totMarge / totKosten * 100 : 0;
-  const totNietGefact  = totAanneemsom - totGefact;
+  // Afgeleide totalen (globaal via _totals uit API)
+  const totAanneemsom = totals?.aanneemsom  ?? 0;
+  const totGefact     = totals?.gefactureerd ?? 0;
+  const totKosten     = totals?.kosten       ?? 0;
+  const totMarge      = totals?.marge        ?? 0;
+  const totNietGefact = totAanneemsom - totGefact;
+  const gemMargePct   = totKosten > 0 ? totMarge / totKosten * 100 : 0;
 
   return (
     <div className="space-y-6 pb-10">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-1.5" />Terug
@@ -145,46 +160,42 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
         )}
       </div>
 
-      {/* Filters */}
+      {/* ── Filters ── */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Status:</span>
-        <FilterChip label="Actueel" active={status === "actueel"} onClick={() => setStatus("actueel")} />
+        <FilterChip label="Actueel"    active={status === "actueel"}    onClick={() => setStatus("actueel")} />
         <FilterChip label="Historisch" active={status === "historisch"} onClick={() => setStatus("historisch")} />
-        {alleProjectleiders.length > 0 && (
-          <>
-            <span className="text-xs text-muted-foreground ml-2">Projectleider:</span>
-            <select
-              value={plFilter}
-              onChange={e => setPlFilter(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">Alle</option>
-              {alleProjectleiders.map(pl => (
-                <option key={pl} value={pl}>{pl}</option>
-              ))}
-            </select>
-          </>
-        )}
         <div className="flex-1" />
         <Input
-          placeholder="Zoeken op naam, nummer, klant…"
+          placeholder="Zoek op naam, nummer, klant, projectleider…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="h-8 w-64 text-sm"
+          className="h-8 w-72 text-sm"
         />
       </div>
 
-      {/* Summary strip */}
-      {!isLoading && projecten.length > 0 && (
+      {/* ── Not-synced ── */}
+      {!isLoading && data?._source === "not-synced" && (
+        <Card>
+          <CardContent className="py-10 flex flex-col items-center gap-3 text-muted-foreground">
+            <DatabaseZap className="h-6 w-6" />
+            <p className="text-sm font-medium">Database niet gesynchroniseerd</p>
+            <p className="text-xs">Start de worker om {label} te synchroniseren.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Samenvattingsbalk (globale totalen) ── */}
+      {!isLoading && totals && (data?.total ?? 0) > 0 && (
         <div className="flex flex-wrap gap-x-8 gap-y-2 px-1">
           {[
-            { label: "Aanneemsom",       value: formatCurrency(totAanneemsom) },
-            { label: "Gefactureerd",     value: formatCurrency(totGefact) },
-            { label: "Niet-gefact.",     value: formatCurrency(totNietGefact), warn: totNietGefact > 0 },
-            { label: "Totale kosten",    value: formatCurrency(totKosten) },
-            { label: "Brutomarge",       value: formatCurrency(totMarge), success: totMarge >= 0 },
-            { label: "Gem. marge",       value: formatPercentage(gemMargePct) },
-            { label: "Projecten",        value: String(projecten.length) },
+            { label: "Aanneemsom",   value: formatCurrency(totAanneemsom) },
+            { label: "Gefactureerd", value: formatCurrency(totGefact) },
+            { label: "Niet-gefact.", value: formatCurrency(totNietGefact), warn: totNietGefact > 0 },
+            { label: "Totale kosten", value: formatCurrency(totKosten) },
+            { label: "Brutomarge",   value: formatCurrency(totMarge), success: totMarge >= 0 },
+            { label: "Gem. marge",   value: formatPercentage(gemMargePct) },
+            { label: "Totaal",       value: `${data?.total ?? 0} ${database === "MAINTENANCE" ? "werkbonnen" : "projecten"}` },
           ].map(({ label, value, warn, success }) => (
             <div key={label} className="text-sm">
               <span className="text-muted-foreground text-xs block">{label}</span>
@@ -196,14 +207,14 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
         </div>
       )}
 
-      {/* Loading */}
+      {/* ── Laden ── */}
       {isLoading && (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       )}
 
-      {/* Error */}
+      {/* ── Fout ── */}
       {isError && (
         <Card>
           <CardContent className="py-10 flex flex-col items-center gap-2 text-muted-foreground">
@@ -213,24 +224,29 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
         </Card>
       )}
 
-      {/* Table */}
-      {!isLoading && !isError && (
+      {/* ── Tabel ── */}
+      {!isLoading && !isError && data?._source !== "not-synced" && (
         <Card>
           <CardContent className="p-0">
             {projecten.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                Geen projecten gevonden
+                Geen {database === "MAINTENANCE" ? "werkbonnen" : "projecten"} gevonden
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40">
-                      {["Projectnr.", "Naam", "Klant", "Projectleider", "Status",
+                      {[
+                        database === "MAINTENANCE" ? "Bonnr." : "Projectnr.",
+                        "Naam", "Klant", "Projectleider", "Status",
                         "Aanneemsom", "Gefactureerd", "Niet-gefact. %",
-                        "Totale kosten", "Brutomarge", "Marge %", ""
+                        "Totale kosten", "Brutomarge", "Marge %", "",
                       ].map((h, i) => (
-                        <th key={h+i} className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap ${i >= 5 ? "text-right" : "text-left"}`}>
+                        <th
+                          key={h + i}
+                          className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap ${i >= 5 ? "text-right" : "text-left"}`}
+                        >
                           {h}
                         </th>
                       ))}
@@ -277,6 +293,35 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
           </CardContent>
         </Card>
       )}
+
+      {/* ── Paginering ── */}
+      {(data?.totalPages ?? 0) > 1 && (
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs text-muted-foreground">
+            {((page - 1) * PAGE_SIZE + 1)}–{Math.min(page * PAGE_SIZE, data?.total ?? 0)} van {data?.total ?? 0}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline" size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage(p => p - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Pagina {page} van {data?.totalPages}
+            </span>
+            <Button
+              variant="outline" size="sm"
+              disabled={page >= (data?.totalPages ?? 1)}
+              onClick={() => setPage(p => p + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
