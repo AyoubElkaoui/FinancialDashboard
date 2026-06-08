@@ -81,24 +81,28 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
   const [search, setSearch]       = useState("");
   const [plFilter, setPlFilter]   = useState("");
 
-  const verbergLeeg = true;
-  const pageSize    = 500;
-
   const { data, isLoading, isError } = useQuery<ProjectenResponse>({
-    queryKey: ["mgm-projecten", database, status, verbergLeeg],
-    queryFn: () =>
-      fetch(`/api/v1/projecten?database=${database}&pageSize=${pageSize}&verbergLeeg=${verbergLeeg}`)
+    queryKey: ["mgm-projecten", database, status],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        database,
+        pageSize:   "5000",
+        verbergLeeg: "true",
+        status,      // server-side status filter (actueel/historisch)
+      });
+      return fetch(`/api/v1/projecten?${params}`)
         .then(r => {
           if (!r.ok) throw new Error("Fout bij laden");
           return r.json();
-        }),
+        });
+    },
   });
 
   const label  = DB_LABELS[database] ?? database;
   const colors = DB_COLORS[database];
 
+  // Search + projectleider filter blijven client-side (snel op al geladen data)
   const projecten: ProjectRow[] = (data?.data ?? []).filter(p => {
-    if (status === "actueel" && p.STATUS !== "ACTIEF") return false;
     if (plFilter && !p.PROJECTLEIDER?.toLowerCase().includes(plFilter.toLowerCase())) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -111,7 +115,7 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
     return true;
   });
 
-  // Unieke projectleiders voor filter-dropdown
+  // Unieke projectleiders voor filter-dropdown (over gehele geladen dataset)
   const alleProjectleiders = [...new Set((data?.data ?? []).map(p => p.PROJECTLEIDER).filter(Boolean))].sort();
 
   // Totals over filtered rows

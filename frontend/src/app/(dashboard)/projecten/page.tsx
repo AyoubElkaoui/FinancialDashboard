@@ -315,6 +315,7 @@ function TableSkeleton({ cols }: { cols: number }) {
 // ─── Inner component ──────────────────────────────────────────────────────────
 
 const PAGE_SIZE_OPTIONS = [50, 100, 250, 500, 2500] as const;
+type StatusFilter = "alle" | "actueel" | "historisch";
 
 function ProjectenInner() {
   const router  = useRouter();
@@ -324,6 +325,7 @@ function ProjectenInner() {
   const [view,      setView]      = useState<View>("table");
   const [pageSize,     setPageSize]     = useState<number>(250);
   const [verbergLeeg,  setVerbergLeeg]  = useState<boolean>(true);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("alle");
 
   useEffect(() => {
     try {
@@ -345,9 +347,14 @@ function ProjectenInner() {
   }, []);
 
   const { data, isLoading } = useQuery<{ data: ElmarProjectSummary[]; total: number; _source?: string }>({
-    queryKey: ["elmar-projecten", activeDb, search, pageSize, verbergLeeg],
+    queryKey: ["elmar-projecten", activeDb, search, pageSize, verbergLeeg, statusFilter],
     queryFn: () => {
-      const params = new URLSearchParams({ database: activeDb, pageSize: String(pageSize), verbergLeeg: String(verbergLeeg) });
+      const params = new URLSearchParams({
+        database:    activeDb,
+        pageSize:    String(pageSize),
+        verbergLeeg: String(verbergLeeg),
+        status:      statusFilter,
+      });
       if (search) params.set("search", search);
       return fetch(`/api/v1/projecten?${params}`).then(r => r.json());
     },
@@ -395,15 +402,25 @@ function ProjectenInner() {
             className="h-9 w-64 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
 
+          {/* Status filter */}
+          <div className="flex items-center rounded-md border overflow-hidden text-xs">
+            {(["alle", "actueel", "historisch"] as const).map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                className={`h-9 px-3 capitalize transition-colors border-l first:border-l-0 ${statusFilter === s ? "bg-blue-600 text-white font-semibold" : "bg-background text-muted-foreground hover:bg-muted"}`}>
+                {s === "alle" ? "Alle" : s === "actueel" ? "Actueel" : "Historisch"}
+              </button>
+            ))}
+          </div>
+
           {/* Toggle lege projecten */}
           <button
             onClick={() => setVerbergLeeg(v => !v)}
             className={`h-9 px-3 rounded-md border text-xs font-medium transition-colors ${
-              verbergLeeg ? "bg-blue-600 text-white border-blue-600" : "bg-background text-muted-foreground hover:bg-muted"
+              verbergLeeg ? "bg-slate-600 text-white border-slate-600" : "bg-background text-muted-foreground hover:bg-muted"
             }`}
             title={verbergLeeg ? "Toont alleen projecten met activiteit — klik om alles te tonen" : "Toont alle projecten — klik om lege te verbergen"}
           >
-            {verbergLeeg ? "Actief" : "Alles"}
+            {verbergLeeg ? "Verberg leeg" : "Toon alles"}
           </button>
 
           {/* Page size selector */}

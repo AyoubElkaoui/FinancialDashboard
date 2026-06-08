@@ -63,7 +63,9 @@ export async function GET(request: NextRequest) {
   const database = s.get("database") ?? "SERVICES";
   const search   = s.get("search")?.toLowerCase() ?? "";
   const page     = Math.max(1, Number(s.get("page") ?? 1));
-  const pageSize = Math.min(5000, Math.max(1, Number(s.get("pageSize") ?? 100)));
+  const pageSize = Math.min(5000, Math.max(1, Number(s.get("pageSize") ?? 250)));
+  // status: "actueel" → ACTIEF only, "historisch" → HISTORISCH only, alles → geen filter
+  const statusParam = s.get("status") ?? "alle";
 
   // Controleer of read-model data heeft voor deze database
   // Systeemprojecten uitsluiten: negatieve aanneemsom = migratiecorrecties
@@ -107,9 +109,14 @@ export async function GET(request: NextRequest) {
   // verbergLeeg=true → verberg projecten zonder enige financiële activiteit
   const verbergLeeg = s.get("verbergLeeg") !== "false";
 
+  const statusFilter = statusParam === "actueel"    ? { status: "ACTIEF" }
+                     : statusParam === "historisch" ? { status: "HISTORISCH" }
+                     : {};
+
   const where = {
     database:    database as Database,
     aanneemsom:  { gte: 0 },   // systeemprojecten (neg aanneemsom) uitsluiten
+    ...statusFilter,
     ...(verbergLeeg ? {
       OR: [
         { aanneemsom:      { gt: 0 } },
