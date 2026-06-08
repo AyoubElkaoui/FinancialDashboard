@@ -55,7 +55,14 @@ export const ADMIN_CONFIG: Array<{
     adminId:      100001,
     database:     "INTERNATIONAL",
     omschrijving: "Elmar International",
-    fbDatabase:   process.env.FB_DATABASE      ?? "",
+    fbDatabase:   process.env.FB_DATABASE_INT  ?? "",   // A11-fix: aparte env var voor ELMI.FDB
+    type:         "project",
+  },
+  {
+    adminId:      Number(process.env.KEYSER_ADMIN_ID ?? 0),
+    database:     "KEYSER",
+    omschrijving: "Keyser",
+    fbDatabase:   process.env.FB_DATABASE_KEY  ?? "",   // A10: pad naar Keyser .FDB
     type:         "project",
   },
 ];

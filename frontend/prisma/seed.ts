@@ -44,12 +44,12 @@ const USERS: {
   },
   {
     email: "brahim@elmarservices.com",
-    role: "VIEWER",
-    databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
+    role: "MGM",
+    databases: ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"],
   },
   {
     email: "yassin@elmarservices.com",
-    role: "VIEWER",
+    role: "MGM",
     databases: ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"],
   },
 ];

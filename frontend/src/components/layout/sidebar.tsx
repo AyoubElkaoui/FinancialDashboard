@@ -9,7 +9,7 @@ import {
   Users, BarChart3, ChevronLeft, ChevronRight,
   Shield, ClipboardList, HelpCircle, Settings2,
   Building2, ShoppingCart, BookOpen, Wrench,
-  TrendingUp, Euro, Receipt, LineChart,
+  TrendingUp, Euro, Receipt, LineChart, PieChart,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -41,6 +41,10 @@ const NAV_CUSTOMER = [
   { href: "/instellingen", label: "Instellingen", icon: Settings2 },
 ];
 
+const MGM_NAV = [
+  { href: "/management", label: "Management", icon: PieChart },
+];
+
 const ADMIN_NAV = [
   { href: "/admin/gebruikers", label: "Gebruikers",  icon: Users },
   { href: "/admin/audit",      label: "Auditlog",    icon: ClipboardList },
@@ -48,7 +52,7 @@ const ADMIN_NAV = [
 
 interface CurrentUser {
   email: string;
-  role: "ADMIN" | "VIEWER";
+  role: "ADMIN" | "MGM" | "VIEWER";
 }
 
 const DB_DOT: Record<string, string> = {
@@ -80,6 +84,7 @@ export function Sidebar() {
   });
 
   const isAdmin  = user?.role === "ADMIN";
+  const isMgm    = user?.role === "MGM" || user?.role === "ADMIN";
   const logoSrc  = getLogo(user?.email);
   const viewType = useViewTypeSafe();
   const activeDb = useActiveDb();
@@ -130,6 +135,23 @@ export function Sidebar() {
             <NavLink key={href} href={href} label={label} icon={Icon} active={active} collapsed={collapsed} />
           );
         })}
+
+        {isMgm && (
+          <>
+            {!collapsed && (
+              <p className="text-[10px] font-semibold uppercase tracking-widest px-2 pb-2 pt-4" style={{ color: "#374e6a" }}>
+                Management
+              </p>
+            )}
+            {collapsed && <div style={{ borderTop: "1px solid #1e2d45" }} className="my-2" />}
+            {MGM_NAV.map(({ href, label, icon: Icon }) => {
+              const active = pathname.startsWith(href);
+              return (
+                <NavLink key={href} href={href} label={label} icon={Icon} active={active} collapsed={collapsed} />
+              );
+            })}
+          </>
+        )}
 
         {isAdmin && (
           <>

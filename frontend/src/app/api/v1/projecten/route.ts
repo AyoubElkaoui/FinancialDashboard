@@ -5,7 +5,13 @@ import { getElmarProjecten } from "@/lib/mock/elmar-data";
 import type { Database } from "@prisma/client";
 
 const PROJECT_DATABASES = ["SERVICES", "INTERNATIONAL"] as const;
-const DEFAULT_UREN_TARIEF = 7.5;
+const DEFAULT_UREN_TARIEF: Record<string, number> = {
+  SERVICES:      7.5,
+  INTERNATIONAL: 7.5,
+  MAINTENANCE:   7.5,
+  KEYSER:        10,
+};
+const DEFAULT_ALG_KOSTEN_PCT = 5;
 
 // Volgorde: 100 → 300 → 060 → 070 → 400+ en overig
 const PROJECT_PREFIX_ORDER = ["100", "300", "060", "070"];
@@ -27,16 +33,17 @@ function sortByProjectnr<T extends { projectNr: string }>(rows: T[]): T[] {
 function applyParams(row: {
   aanneemsom: unknown; gefactureerd: unknown;
   kostenMateriaal: unknown; kostenArbeid: unknown; kostenOverig: unknown; urenTotaal: unknown;
-}, input?: { urenTarief: number | null; algKostenPct: number | null } | null) {
+}, database: string, input?: { urenTarief: number | null; algKostenPct: number | null } | null) {
   const aanneemsom    = Number(row.aanneemsom)    || 0;
   const gefactureerd  = Number(row.gefactureerd)  || 0;
-  const urenTarief    = input?.urenTarief    ?? DEFAULT_UREN_TARIEF;
-  const algKostenPct  = input?.algKostenPct  ?? 0;
+  const urenTarief    = input?.urenTarief    ?? (DEFAULT_UREN_TARIEF[database] ?? 7.5);
+  // Alg. kosten grondslag = aanneemsom (incl. meerwerk zodra apart gesynchroniseerd)
+  const algKostenPct  = input?.algKostenPct  ?? DEFAULT_ALG_KOSTEN_PCT;
   const kostenSyntess = (Number(row.kostenMateriaal) || 0)
                       + (Number(row.kostenArbeid)    || 0)
                       + (Number(row.kostenOverig)    || 0);
   const kostenIndirect = (Number(row.urenTotaal) || 0) * urenTarief;
-  const kostenAlgemeen = kostenSyntess * (algKostenPct / 100);
+  const kostenAlgemeen = aanneemsom * (algKostenPct / 100);
   const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
   const brutomarge     = gefactureerd - totaleKosten;
   // KN = totale kosten; marge % = brutomarge ÷ totale kosten × 100
@@ -128,7 +135,7 @@ export async function GET(request: NextRequest) {
 
   const rawData = rows.map(row => {
     const input  = inputMap.get(row.projectNr);
-    const calc   = applyParams(row, input);
+    const calc   = applyParams(row, database, input);
     return {
       ID:                 row.projectNr,
       DATABASE:           database,

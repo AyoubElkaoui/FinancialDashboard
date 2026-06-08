@@ -9,7 +9,7 @@ import type { Database } from "@prisma/client";
 const createSchema = z.object({
   email: z.string().email(),
   password: z.string().min(12),
-  role: z.enum(["ADMIN", "VIEWER"]).default("VIEWER"),
+  role: z.enum(["ADMIN", "MGM", "VIEWER"]).default("VIEWER"),
   databases: z.array(z.enum(["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"])),
 });
 
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     data: {
       email,
       passwordHash,
-      role: role as "ADMIN" | "VIEWER",
+      role: role as "ADMIN" | "MGM" | "VIEWER",
       databases: {
         create: databases.map((db) => ({ database: db as Database })),
       },

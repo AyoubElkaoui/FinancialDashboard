@@ -2,7 +2,13 @@ import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import type { Database } from "@prisma/client";
 
-const DEFAULT_UREN_TARIEF = 7.5;
+const DEFAULT_UREN_TARIEF: Record<string, number> = {
+  SERVICES:      7.5,
+  INTERNATIONAL: 7.5,
+  MAINTENANCE:   7.5,
+  KEYSER:        10,
+};
+const DEFAULT_ALG_KOSTEN_PCT = 5;
 
 export async function GET(
   request: NextRequest,
@@ -40,8 +46,9 @@ export async function GET(
     });
   } catch { /* geen overrides */ }
 
-  const urenTarief   = Number(input?.urenTarief   ?? DEFAULT_UREN_TARIEF);
-  const algKostenPct = Number(input?.algKostenPct ?? 0);
+  const urenTarief   = Number(input?.urenTarief   ?? (DEFAULT_UREN_TARIEF[database] ?? 7.5));
+  // Alg. kosten grondslag = aanneemsom (incl. meerwerk zodra apart gesynchroniseerd)
+  const algKostenPct = Number(input?.algKostenPct ?? DEFAULT_ALG_KOSTEN_PCT);
 
   const aanneemsom    = Number(rm.aanneemsom)    || 0;
   const gefactureerd  = Number(rm.gefactureerd)  || 0;
@@ -51,7 +58,7 @@ export async function GET(
                       + (Number(rm.kostenArbeid)    || 0)
                       + (Number(rm.kostenOverig)    || 0);
   const kostenIndirect = urenTotaal * urenTarief;
-  const kostenAlgemeen = kostenSyntess * (algKostenPct / 100);
+  const kostenAlgemeen = aanneemsom * (algKostenPct / 100);
   const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
   const brutomarge     = gefactureerd - totaleKosten;
   // KN = totale kosten; marge % = brutomarge ÷ totale kosten × 100

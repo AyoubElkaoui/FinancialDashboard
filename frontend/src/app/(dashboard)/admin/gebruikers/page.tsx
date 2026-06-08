@@ -22,7 +22,7 @@ type DbOption = (typeof DB_OPTIONS)[number];
 interface User {
   id: string;
   email: string;
-  role: "ADMIN" | "VIEWER";
+  role: "ADMIN" | "MGM" | "VIEWER";
   totpEnabled: boolean;
   databases: { database: DbOption }[];
   createdAt: string;
@@ -41,11 +41,11 @@ export default function GebruikersPage() {
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"ADMIN" | "VIEWER">("VIEWER");
+  const [role, setRole] = useState<"ADMIN" | "MGM" | "VIEWER">("VIEWER");
   const [databases, setDatabases] = useState<DbOption[]>([]);
 
   const pwOk = password.length === 0 || password.length >= 12;
-  const canSubmit = !!email && password.length >= 12 && databases.length > 0;
+  const canSubmit = !!email && password.length >= 12 && databases.length > 0 && !!role;
 
   const toggleDb = (db: DbOption) =>
     setDatabases((prev) => (prev.includes(db) ? prev.filter((d) => d !== db) : [...prev, db]));
@@ -132,14 +132,14 @@ export default function GebruikersPage() {
             <div className="space-y-1.5">
               <Label>Rol</Label>
               <div className="flex gap-2">
-                {(["VIEWER", "ADMIN"] as const).map((r) => (
+                {(["VIEWER", "MGM", "ADMIN"] as const).map((r) => (
                   <button
                     key={r}
                     type="button"
                     onClick={() => setRole(r)}
                     className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${role === r ? "bg-blue-600 text-white border-blue-600" : "border-border hover:border-blue-400"}`}
                   >
-                    {r === "ADMIN" ? "Beheerder" : "Gebruiker"}
+                    {r === "ADMIN" ? "Beheerder" : r === "MGM" ? "Management" : "Gebruiker"}
                   </button>
                 ))}
               </div>
@@ -198,10 +198,13 @@ export default function GebruikersPage() {
                   <div className="min-w-0">
                     <p className="font-medium truncate">{user.email}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <Badge variant={user.role === "ADMIN" ? "default" : "secondary"} className="text-xs">
+                      <Badge
+                        variant={user.role === "ADMIN" ? "default" : user.role === "MGM" ? "outline" : "secondary"}
+                        className={`text-xs ${user.role === "MGM" ? "border-emerald-500 text-emerald-700 dark:text-emerald-400" : ""}`}
+                      >
                         {user.role === "ADMIN" ? (
                           <><Shield className="h-2.5 w-2.5 mr-1" />Beheerder</>
-                        ) : "Gebruiker"}
+                        ) : user.role === "MGM" ? "Management" : "Gebruiker"}
                       </Badge>
                       {user.databases.map((d) => (
                         <Badge key={d.database} variant="outline" className="text-xs">

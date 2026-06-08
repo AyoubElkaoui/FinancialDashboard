@@ -563,7 +563,8 @@ export interface ElmarProjectSummary {
 function computeRapport(project: ElmarProject): ElmarRapport {
   const TOTAAL_AANNEEMSOM = project.AANNEEMSOM + project.MEERWERK;
   const INDIRECTE_KOSTEN  = project.UREN_AANTAL * project.UREN_TARIEF;
-  const ALG_KOSTEN        = Math.round(project.DIRECTE_KOSTEN * project.ALG_KOSTEN_PCT / 100 * 100) / 100;
+  // Alg. kosten grondslag = aanneemsom + meerwerk (niet directe kosten)
+  const ALG_KOSTEN        = Math.round(TOTAAL_AANNEEMSOM * project.ALG_KOSTEN_PCT / 100 * 100) / 100;
   const TOTALE_KOSTEN     = project.DIRECTE_KOSTEN + INDIRECTE_KOSTEN + ALG_KOSTEN;
   const GEFACTUREERD_TOTAAL = project.FACTUREN.reduce((s, f) => s + f.BEDRAG_EXCL, 0);
   const BETAALD_TOTAAL    = project.FACTUREN.reduce((s, f) => s + f.BETAALD_BEDRAG, 0);
