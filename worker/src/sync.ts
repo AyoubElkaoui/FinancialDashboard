@@ -257,13 +257,13 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
 
     // 1. Rubrieken (synchroon via isql)
     log("  Rubrieken laden...");
-    const rubrieken = fetchRubrieken();
+    const rubrieken = fetchRubrieken(fbDatabase);
     const maps = buildRubriekMaps(rubrieken);
     log(`  ${rubrieken.length} rubrieken geladen`);
 
     // 2. Projecten
     log("  Projecten laden...");
-    const projecten = fetchProjecten(adminId);
+    const projecten = fetchProjecten(adminId, fbDatabase);
     log(`  ${projecten.length} projecten gevonden`);
 
     if (projecten.length === 0) {
@@ -274,30 +274,30 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
 
     // 3. Klanten
     log("  Klanten laden...");
-    const relaties = fetchRelaties(adminId);
+    const relaties = fetchRelaties(adminId, fbDatabase);
     const klantMap = new Map(relaties.map(r => [r.GC_ID, r.GC_OMSCHRIJVING]));
 
     // 4. Aanneemsom
     log("  Aanneemsom laden...");
-    const orderRows = fetchOrderAgg(adminId);
+    const orderRows = fetchOrderAgg(adminId, fbDatabase);
     const aanneesomMap = new Map(orderRows.map(o => [o.WERK_GC_ID, round2(o.AANNEEMSOM)]));
 
     // 5. Journaal aggregaten
     log("  Journaal aggregaten laden...");
-    const journaalAgg = fetchJournaalAgg(adminId);
+    const journaalAgg = fetchJournaalAgg(adminId, fbDatabase);
     const journaalMap = aggregeerJournaal(journaalAgg, maps);
     log(`  ${journaalAgg.length} journaalrijen geaggregeerd`);
 
     // 6. Uren aggregaten
     log("  Uren laden...");
-    const urenAgg = fetchUrenAgg(adminId);
+    const urenAgg = fetchUrenAgg(adminId, fbDatabase);
     const urenMap = new Map(urenAgg.map(u => [u.WERK_GC_ID, round2(u.UREN_TOTAAL)]));
 
     // 6b. Projectleiders via AT_ORDER.MEDEW_GC_ID → AT_MEDEW
     log("  Projectleiders laden...");
     let projectleiderMap = new Map<number, string>();
     try {
-      const plRows = fetchProjectleiders(adminId);
+      const plRows = fetchProjectleiders(adminId, fbDatabase);
       projectleiderMap = new Map(plRows.map(p => [p.WERK_GC_ID, p.PROJECTLEIDER]));
       log(`  ${plRows.length} projectleiders gevonden`);
     } catch (err) {
@@ -308,7 +308,7 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
     log("  Pakbon-kosten laden...");
     let pakbonMap = new Map<number, number>();
     try {
-      const pbRows = fetchPakbonKosten(adminId);
+      const pbRows = fetchPakbonKosten(adminId, fbDatabase);
       pakbonMap = new Map(pbRows.map(p => [p.WERK_GC_ID, p.BEDRAG_PAKBON]));
       log(`  ${pbRows.length} projecten met pakbon-kosten`);
     } catch (err) {
@@ -317,15 +317,15 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
 
     // 7. Company-level debiteuren (1300-saldo, niet project-gekoppeld)
     log("  Debiteuren laden...");
-    const totaalDebiteuren = fetchDebiteuren();
+    const totaalDebiteuren = fetchDebiteuren(fbDatabase);
     log(`  Debiteuren netto-saldo: €${totaalDebiteuren.toFixed(2)}`);
 
     // 8. Details voor rm_journaal en rm_uren
     log("  Journaal details laden...");
-    const journaalDetail = fetchJournaalDetail(adminId);
+    const journaalDetail = fetchJournaalDetail(adminId, fbDatabase);
 
     log("  Uren details laden...");
-    const urenDetail = fetchUrenDetail(adminId);
+    const urenDetail = fetchUrenDetail(adminId, fbDatabase);
 
     // WerkId → projectnummer mapping
     const werkNrMap = new Map(projecten.map(p => [p.GC_ID, p.GC_CODE]));

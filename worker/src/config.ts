@@ -52,10 +52,11 @@ export const ADMIN_CONFIG: Array<{
     type:         "werkbon",
   },
   {
-    adminId:      100001,
+    // ELMI.FDB is een aparte Firebird database; adminId is de ADMINIS_GC_ID daarin (standaard 1)
+    adminId:      Number(process.env.INTERNATIONAL_ADMIN_ID ?? 1),
     database:     "INTERNATIONAL",
     omschrijving: "Elmar International",
-    fbDatabase:   process.env.FB_DATABASE_INT  ?? "",   // A11-fix: aparte env var voor ELMI.FDB
+    fbDatabase:   process.env.FB_DATABASE_INT  ?? "",
     type:         "project",
   },
   {

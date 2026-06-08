@@ -78,14 +78,14 @@ const toNull = (s: string): string | null => s.trim() === "" ? null : s.trim();
 // ─── Query functies ─────────────────────────────────────────────────────────────
 
 /** Alle rubriek-codes inclusief type (W/B). */
-export function fetchRubrieken(): FbRubriek[] {
+export function fetchRubrieken(fbDatabase?: string): FbRubriek[] {
   const rows = fbQuery(`
     SELECT GC_ID, GC_CODE, GC_OMSCHRIJVING, TYPE_RUBRIEK
     FROM AT_RUBRIEK
     WHERE TYPE_RUBRIEK IN ('W', 'B')
       AND GC_CODE IS NOT NULL
     ORDER BY GC_CODE;
-  `);
+  `, fbDatabase);
   return rows
     .filter(r => r.GC_ID && r.GC_CODE)
     .map(r => ({
@@ -97,7 +97,7 @@ export function fetchRubrieken(): FbRubriek[] {
 }
 
 /** Alle projecten (AT_WERK) voor één administratie. */
-export function fetchProjecten(adminId: number): FbWerk[] {
+export function fetchProjecten(adminId: number, fbDatabase?: string): FbWerk[] {
   const rows = fbQuery(`
     SELECT GC_ID, GC_CODE, GC_OMSCHRIJVING, OPD_RELATIE_GC_ID,
            COALESCE(TRIM(GC_HISTORISCH_JN), 'N') AS GC_HISTORISCH_JN
@@ -105,7 +105,7 @@ export function fetchProjecten(adminId: number): FbWerk[] {
     WHERE ADMINIS_GC_ID = ${adminId}
       AND GC_CODE IS NOT NULL
     ORDER BY GC_CODE;
-  `);
+  `, fbDatabase);
   return rows.map(r => ({
     GC_ID:             toInt(r.GC_ID),
     GC_CODE:           r.GC_CODE.trim(),
@@ -116,7 +116,7 @@ export function fetchProjecten(adminId: number): FbWerk[] {
 }
 
 /** Klantnamen die bij de projecten van deze administratie horen. */
-export function fetchRelaties(adminId: number): FbRelatie[] {
+export function fetchRelaties(adminId: number, fbDatabase?: string): FbRelatie[] {
   const rows = fbQuery(`
     SELECT DISTINCT r.GC_ID, r.GC_OMSCHRIJVING
     FROM AT_RELATIE r
@@ -127,7 +127,7 @@ export function fetchRelaties(adminId: number): FbRelatie[] {
         AND OPD_RELATIE_GC_ID IS NOT NULL
     )
     ORDER BY r.GC_ID;
-  `);
+  `, fbDatabase);
   return rows.map(r => ({
     GC_ID:           toInt(r.GC_ID),
     GC_OMSCHRIJVING: r.GC_OMSCHRIJVING.trim(),
@@ -138,7 +138,7 @@ export function fetchRelaties(adminId: number): FbRelatie[] {
  * Aanneemsom per project (som AT_ORDER.BEDRAG_TOTAAL, excl. BTW bevestigd).
  * METH_BEREKENING en BTW_VERREKENING worden meegeleverd voor auditabiliteit.
  */
-export function fetchOrderAgg(adminId: number): FbOrderAgg[] {
+export function fetchOrderAgg(adminId: number, fbDatabase?: string): FbOrderAgg[] {
   const rows = fbQuery(`
     SELECT
       o.WERK_GC_ID,
@@ -151,7 +151,7 @@ export function fetchOrderAgg(adminId: number): FbOrderAgg[] {
       AND o.WERK_GC_ID IS NOT NULL
     GROUP BY o.WERK_GC_ID
     ORDER BY o.WERK_GC_ID;
-  `);
+  `, fbDatabase);
   return rows.map(r => ({
     WERK_GC_ID:      toInt(r.WERK_GC_ID),
     AANNEEMSOM:      toNum(r.AANNEEMSOM),
@@ -166,7 +166,7 @@ export function fetchOrderAgg(adminId: number): FbOrderAgg[] {
  * gebeurt in transform.ts via de rubriek-whitelist.
  * WIP-mutaties (8030/8040/8045) worden gefilterd in buildRubriekMaps.
  */
-export function fetchJournaalAgg(adminId: number): FbJournaalAgg[] {
+export function fetchJournaalAgg(adminId: number, fbDatabase?: string): FbJournaalAgg[] {
   const rows = fbQuery(`
     SELECT
       j.WERK_GC_ID,
@@ -181,7 +181,7 @@ export function fetchJournaalAgg(adminId: number): FbJournaalAgg[] {
       AND j.WERK_GC_ID <> 0
     GROUP BY j.WERK_GC_ID, j.RUBRIEK_GC_ID, j.DEBET_CREDIT
     ORDER BY j.WERK_GC_ID;
-  `);
+  `, fbDatabase);
   return rows.map(r => ({
     WERK_GC_ID:    toInt(r.WERK_GC_ID),
     RUBRIEK_GC_ID: toInt(r.RUBRIEK_GC_ID),
@@ -191,7 +191,7 @@ export function fetchJournaalAgg(adminId: number): FbJournaalAgg[] {
 }
 
 /** Journaaldetails voor rm_journaal (grootboek-pagina), laatste 365 dagen. */
-export function fetchJournaalDetail(adminId: number): FbJournaalDetail[] {
+export function fetchJournaalDetail(adminId: number, fbDatabase?: string): FbJournaalDetail[] {
   const rows = fbQuery(`
     SELECT
       j.WERK_GC_ID,
@@ -213,7 +213,7 @@ export function fetchJournaalDetail(adminId: number): FbJournaalDetail[] {
       AND r.TYPE_RUBRIEK IN ('W', 'B')
       AND CAST(s.DOORBOEKDATUM AS DATE) >= CURRENT_DATE - 365
     ORDER BY s.DOORBOEKDATUM DESC;
-  `);
+  `, fbDatabase);
   return rows
     .filter(r => r.WERK_GC_ID && r.RUBRIEK_CODE && r.DEBET_CREDIT)
     .map(r => ({
@@ -229,7 +229,7 @@ export function fetchJournaalDetail(adminId: number): FbJournaalDetail[] {
 }
 
 /** Uren-totalen per project. */
-export function fetchUrenAgg(adminId: number): FbUrenAgg[] {
+export function fetchUrenAgg(adminId: number, fbDatabase?: string): FbUrenAgg[] {
   const rows = fbQuery(`
     SELECT
       u.WERK_GC_ID,
@@ -241,7 +241,7 @@ export function fetchUrenAgg(adminId: number): FbUrenAgg[] {
       AND u.WERK_GC_ID IS NOT NULL
     GROUP BY u.WERK_GC_ID
     ORDER BY u.WERK_GC_ID;
-  `);
+  `, fbDatabase);
   return rows.map(r => ({
     WERK_GC_ID:  toInt(r.WERK_GC_ID),
     UREN_TOTAAL: toNum(r.UREN_TOTAAL),
@@ -258,7 +258,7 @@ export interface FbProjectleider {
  * Sommige projecten hebben meerdere orders; we nemen de alphabetisch eerste naam.
  * Veld MEDEW_GC_ID op AT_ORDER: kandidaat per spec — verifieer bij afwijking.
  */
-export function fetchProjectleiders(adminId: number): FbProjectleider[] {
+export function fetchProjectleiders(adminId: number, fbDatabase?: string): FbProjectleider[] {
   const rows = fbQuery(`
     SELECT
       o.WERK_GC_ID,
@@ -271,7 +271,7 @@ export function fetchProjectleiders(adminId: number): FbProjectleider[] {
       AND o.MEDEW_GC_ID IS NOT NULL
     GROUP BY o.WERK_GC_ID
     ORDER BY o.WERK_GC_ID;
-  `);
+  `, fbDatabase);
   return rows
     .filter(r => r.WERK_GC_ID)
     .map(r => ({
@@ -465,7 +465,7 @@ export function fetchDebiteuren(fbDatabase?: string): number {
 }
 
 /** Uren-details per medewerker/dag (rm_uren), laatste 365 dagen. */
-export function fetchUrenDetail(adminId: number): FbUrenDetail[] {
+export function fetchUrenDetail(adminId: number, fbDatabase?: string): FbUrenDetail[] {
   const rows = fbQuery(`
     SELECT
       u.WERK_GC_ID,
@@ -481,7 +481,7 @@ export function fetchUrenDetail(adminId: number): FbUrenDetail[] {
       AND u.WERK_GC_ID IS NOT NULL
       AND CAST(u.DATUM AS DATE) >= CURRENT_DATE - 365
     ORDER BY u.DATUM DESC;
-  `);
+  `, fbDatabase);
   return rows
     .filter(r => r.WERK_GC_ID && r.DATUM && r.AANTAL)
     .map(r => ({
@@ -509,7 +509,7 @@ export interface FbPakbonKosten {
  *
  * ⚠️ Veldnamen gebaseerd op schema-spec; verifieer AT_PAKBON.DOCUMENT_GC_ID bij afwijking.
  */
-export function fetchPakbonKosten(adminId: number): FbPakbonKosten[] {
+export function fetchPakbonKosten(adminId: number, fbDatabase?: string): FbPakbonKosten[] {
   const rows = fbQuery(`
     SELECT
       ib.WERK_GC_ID,
@@ -525,7 +525,7 @@ export function fetchPakbonKosten(adminId: number): FbPakbonKosten[] {
       AND ib.WERK_GC_ID IS NOT NULL
     GROUP BY ib.WERK_GC_ID
     ORDER BY ib.WERK_GC_ID;
-  `);
+  `, fbDatabase);
   return rows
     .filter(r => r.WERK_GC_ID)
     .map(r => ({
