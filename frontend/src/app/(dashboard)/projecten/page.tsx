@@ -344,7 +344,7 @@ function ProjectenInner() {
     return () => window.removeEventListener("elmar-db-change", onEvent);
   }, []);
 
-  const { data, isLoading } = useQuery<{ data: ElmarProjectSummary[]; total: number }>({
+  const { data, isLoading } = useQuery<{ data: ElmarProjectSummary[]; total: number; _source?: string }>({
     queryKey: ["elmar-projecten", activeDb, search, pageSize, verbergLeeg],
     queryFn: () => {
       const params = new URLSearchParams({ database: activeDb, pageSize: String(pageSize), verbergLeeg: String(verbergLeeg) });
@@ -354,8 +354,9 @@ function ProjectenInner() {
     enabled: mounted,
   });
 
-  const projecten = data?.data ?? [];
-  const total     = data?.total ?? 0;
+  const projecten  = data?.data ?? [];
+  const total      = data?.total ?? 0;
+  const notSynced  = data?._source === "not-synced";
 
   const switchView = (v: View) => {
     setView(v);
@@ -434,18 +435,29 @@ function ProjectenInner() {
       {/* KPI summary — always visible */}
       {!isLoading && projecten.length > 0 && <KpiSummary projecten={projecten} />}
 
+      {/* Not synced — geen echte data beschikbaar */}
+      {!isLoading && notSynced && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
+          <p className="font-medium text-muted-foreground">Database niet gesynchroniseerd</p>
+          <p className="text-sm text-muted-foreground/70 max-w-xs">
+            {DB_NAMES[activeDb] ?? activeDb} is nog niet gekoppeld aan het dashboard. Neem contact op met de beheerder om de synchronisatie in te stellen.
+          </p>
+        </div>
+      )}
+
       {/* Content */}
       {isLoading ? (
         <TableSkeleton cols={view === "spreadsheet" ? 10 : 11} />
-      ) : view === "table" ? (
+      ) : !notSynced && view === "table" ? (
         <TableView projecten={projecten} activeDb={activeDb} onNavigate={navigate} />
-      ) : view === "cards" ? (
+      ) : !notSynced && view === "cards" ? (
         <CardView projecten={projecten} onNavigate={navigate} />
-      ) : (
+      ) : !notSynced ? (
         <SpreadsheetView projecten={projecten} activeDb={activeDb} onNavigate={navigate} />
-      )}
+      ) : null}
 
-      {data && (
+      {data && !notSynced && (
         <p className="text-xs text-muted-foreground">
           {data.total} {data.total === 1 ? "project" : "projecten"} — {DB_NAMES[activeDb] ?? activeDb}
         </p>

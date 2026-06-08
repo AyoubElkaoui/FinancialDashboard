@@ -7,7 +7,7 @@ import { formatCurrency, formatPercentage } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Euro, TrendingUp, FolderKanban, AlertTriangle, PieChart,
-  ChevronRight, Building2, ArrowUpRight,
+  ChevronRight, Building2, ArrowUpRight, SlidersHorizontal,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +25,10 @@ interface DbStats {
   actief: number;
   totaal: number;
   source: "read-model" | "mock" | "not-connected";
+  directeKosten: number;
+  pakbonKosten: number;
+  indirecteKosten: number;
+  algemeenKosten: number;
 }
 
 interface SamenvattingResponse {
@@ -32,6 +36,8 @@ interface SamenvattingResponse {
   perDatabase: DbStats[];
   totaal: DbStats & { margePct: number; nietGefactureerdPct: number };
 }
+
+type Toggles = { directe: boolean; pakbon: boolean; indirect: boolean; algemeen: boolean };
 
 // ─── DB colour config ─────────────────────────────────────────────────────────
 
@@ -93,11 +99,95 @@ function KpiCard({
   );
 }
 
+// ─── Kosten-toggles panel ─────────────────────────────────────────────────────
+
+function KostenTogglesPanel({
+  totaal, toggles, setToggles,
+}: {
+  totaal: DbStats & { margePct: number; nietGefactureerdPct: number };
+  toggles: Toggles;
+  setToggles: React.Dispatch<React.SetStateAction<Toggles>>;
+}) {
+  const toggle = (k: keyof Toggles) => setToggles(t => ({ ...t, [k]: !t[k] }));
+  const allOn  = Object.values(toggles).every(Boolean);
+
+  const items: { key: keyof Toggles; label: string; amount: number }[] = [
+    { key: "directe",  label: "Directe kosten",   amount: totaal.directeKosten },
+    { key: "pakbon",   label: "Pakbonnen",          amount: totaal.pakbonKosten },
+    { key: "indirect", label: "Indirecte kosten",   amount: totaal.indirecteKosten },
+    { key: "algemeen", label: "Alg. kosten (5%)",   amount: totaal.algemeenKosten },
+  ];
+
+  return (
+    <Card className="border-dashed border-blue-200/60 dark:border-blue-800/40">
+      <CardContent className="pt-4 pb-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-blue-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Kosten-toggles — simulatie weergave
+            </span>
+          </div>
+          {!allOn && (
+            <button
+              onClick={() => setToggles({ directe: true, pakbon: true, indirect: true, algemeen: true })}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Alles aan
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {items.map(({ key, label, amount }) => {
+            const on = toggles[key];
+            return (
+              <button
+                key={key}
+                onClick={() => toggle(key)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                  on
+                    ? "bg-card border-border hover:border-blue-400 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                    : "bg-muted/60 border-border/50 text-muted-foreground/50"
+                }`}
+              >
+                <span className={`h-2 w-2 rounded-full flex-shrink-0 ${on ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+                <span className={on ? "" : "line-through"}>{label}</span>
+                <span className={`font-mono tabular-nums ${on ? "text-foreground" : "text-muted-foreground/40"}`}>
+                  {formatCurrency(amount)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {!allOn && (
+          <p className="text-[11px] text-muted-foreground/60 mt-2">
+            Puur weergave — geen data-wijziging. Uitgeschakelde kostensoorten tellen niet mee in totale kosten en marge.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function applyToggles(d: DbStats, toggles: Toggles) {
+  if (d.source === "not-connected") return { totaleKosten: 0, brutomarge: 0, margePct: 0 };
+  const totaal = (toggles.directe  ? d.directeKosten   : 0)
+               + (toggles.pakbon   ? d.pakbonKosten     : 0)
+               + (toggles.indirect ? d.indirecteKosten  : 0)
+               + (toggles.algemeen ? d.algemeenKosten   : 0);
+  const marge    = d.gefactureerd - totaal;
+  const margePct = totaal > 0 ? marge / totaal * 100 : 0;
+  return { totaleKosten: totaal, brutomarge: marge, margePct };
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ManagementPage() {
   const router = useRouter();
   const [status, setStatus] = useState<"actueel" | "historisch">("actueel");
+  const [toggles, setToggles] = useState<Toggles>({ directe: true, pakbon: true, indirect: true, algemeen: true });
 
   const { data, isLoading } = useQuery<SamenvattingResponse>({
     queryKey: ["mgm-samenvatting", status],
@@ -108,8 +198,52 @@ export default function ManagementPage() {
       }),
   });
 
-  const t = data?.totaal;
-  const dbs = data?.perDatabase ?? [];
+  const { data: me } = useQuery<{ role: string }>({
+    queryKey: ["me"],
+    queryFn: () => fetch("/api/auth/me").then(r => r.json()),
+    staleTime: 60_000,
+  });
+  const isMgm = me?.role === "MGM" || me?.role === "ADMIN";
+
+  const rawDbs  = data?.perDatabase ?? [];
+  const rawTotaal = data?.totaal;
+
+  // Effective values per database, applying toggle state
+  const dbs = rawDbs.map(d => {
+    const eff = applyToggles(d, toggles);
+    return { ...d, ...eff };
+  });
+
+  // Effective consolidated totals
+  const connectedDbs = dbs.filter(d => d.source !== "not-connected");
+  const effectiefTotaal = connectedDbs.reduce(
+    (acc, d) => ({
+      aanneemsom:       acc.aanneemsom       + d.aanneemsom,
+      gefactureerd:     acc.gefactureerd     + d.gefactureerd,
+      totaleKosten:     acc.totaleKosten     + d.totaleKosten,
+      brutomarge:       acc.brutomarge       + d.brutomarge,
+      actief:           acc.actief           + d.actief,
+      totaal:           acc.totaal           + d.totaal,
+      nietGefactureerd: acc.nietGefactureerd + d.nietGefactureerd,
+    }),
+    { aanneemsom: 0, gefactureerd: 0, totaleKosten: 0, brutomarge: 0, actief: 0, totaal: 0, nietGefactureerd: 0 }
+  );
+  const effectiefMargePct    = effectiefTotaal.totaleKosten > 0 ? effectiefTotaal.brutomarge / effectiefTotaal.totaleKosten * 100 : 0;
+  const effectiefNietGefPct  = effectiefTotaal.aanneemsom   > 0 ? effectiefTotaal.nietGefactureerd / effectiefTotaal.aanneemsom * 100 : 0;
+
+  // Combined totaal for display (effective values merged with raw for non-toggle fields)
+  const t = rawTotaal ? {
+    ...rawTotaal,
+    totaleKosten:        effectiefTotaal.totaleKosten,
+    brutomarge:          effectiefTotaal.brutomarge,
+    margePct:            effectiefMargePct,
+    aanneemsom:          effectiefTotaal.aanneemsom,
+    gefactureerd:        effectiefTotaal.gefactureerd,
+    actief:              effectiefTotaal.actief,
+    totaal:              effectiefTotaal.totaal,
+    nietGefactureerd:    effectiefTotaal.nietGefactureerd,
+    nietGefactureerdPct: effectiefNietGefPct,
+  } : null;
 
   return (
     <div className="space-y-6 pb-10">
@@ -140,8 +274,13 @@ export default function ManagementPage() {
         </div>
       )}
 
-      {!isLoading && t && (
+      {!isLoading && t && rawTotaal && (
         <>
+          {/* Kosten-toggles — alleen zichtbaar voor MGM/ADMIN */}
+          {isMgm && (
+            <KostenTogglesPanel totaal={rawTotaal} toggles={toggles} setToggles={setToggles} />
+          )}
+
           {/* KPI row */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard label="Totale aanneemsom"    value={formatCurrency(t.aanneemsom)}   icon={Building2} color="blue" sub={`${t.actief} actieve projecten`} />

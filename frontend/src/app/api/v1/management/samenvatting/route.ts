@@ -23,28 +23,14 @@ const DEFAULT_ALG_KOSTEN_PCT = 5;
 
 function r2(n: number) { return Math.round(n * 100) / 100; }
 
-function computeFinancials(
-  aanneemsom: number,
-  gefactureerd: number,
-  kostenSyntess: number,
-  urenTotaal: number,
-  database: string,
-  input?: { urenTarief: number | null; algKostenPct: number | null } | null
-) {
-  const urenTarief    = input?.urenTarief    ?? (DEFAULT_UREN_TARIEF[database] ?? 7.5);
-  const algKostenPct  = input?.algKostenPct  ?? DEFAULT_ALG_KOSTEN_PCT;
-  const kostenIndirect = urenTotaal * urenTarief;
-  const kostenAlgemeen = aanneemsom * (algKostenPct / 100);
-  const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
-  const brutomarge     = gefactureerd - totaleKosten;
-  const margePct       = totaleKosten > 0 ? brutomarge / totaleKosten * 100 : 0;
-  const nietGefactureerd    = aanneemsom - gefactureerd;
-  const nietGefactureerdPct = aanneemsom > 0 ? nietGefactureerd / aanneemsom * 100 : 0;
-  return { totaleKosten, brutomarge, margePct, nietGefactureerd, nietGefactureerdPct };
-}
-
 function emptyStats() {
-  return { aanneemsom: 0, gefactureerd: 0, totaleKosten: 0, brutomarge: 0, actief: 0, totaal: 0, nietGefactureerd: 0 };
+  return {
+    aanneemsom: 0, gefactureerd: 0,
+    totaleKosten: 0, brutomarge: 0,
+    actief: 0, totaal: 0,
+    nietGefactureerd: 0,
+    directeKosten: 0, pakbonKosten: 0, indirecteKosten: 0, algemeenKosten: 0,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -66,32 +52,23 @@ export async function GET(request: NextRequest) {
     const stats = emptyStats();
     let source: "read-model" | "mock" | "not-connected" = "mock";
 
-    // ── KEYSER: check of env-vars zijn gezet (adminId 0 = niet geconfigureerd) ──
+    // ── KEYSER: check of env-vars zijn gezet ──────────────────────────────────
     if (database === "KEYSER") {
       const rmCount = await db.rmProjectSummary.count({
         where: { database: "KEYSER", aanneemsom: { gte: 0 } },
       }).catch(() => 0);
 
       if (rmCount === 0) {
-        // Nog niet gekoppeld: toon placeholder, geen mock-cijfers
         source = "not-connected";
         return {
-          database,
-          label:               DB_LABELS[database],
-          aanneemsom:          0,
-          gefactureerd:        0,
-          totaleKosten:        0,
-          brutomarge:          0,
-          margePct:            0,
-          nietGefactureerd:    0,
-          nietGefactureerdPct: 0,
-          actief:              0,
-          totaal:              0,
-          source,
+          database, label: DB_LABELS[database],
+          aanneemsom: 0, gefactureerd: 0, totaleKosten: 0, brutomarge: 0,
+          margePct: 0, nietGefactureerd: 0, nietGefactureerdPct: 0,
+          actief: 0, totaal: 0, source,
+          directeKosten: 0, pakbonKosten: 0, indirecteKosten: 0, algemeenKosten: 0,
         };
       }
 
-      // KEYSER heeft data — lees read-model (project-type)
       source = "read-model";
       const whereStatus = statusFilter === "actueel" ? { status: "ACTIEF" } : {};
       const rows = await db.rmProjectSummary.findMany({
@@ -104,40 +81,48 @@ export async function GET(request: NextRequest) {
       const inputMap = new Map(inputs.map(i => [i.projectCode, i]));
 
       for (const row of rows) {
-        const ns   = Number(row.aanneemsom)    || 0;
-        const gef  = Number(row.gefactureerd)  || 0;
-        const ks   = (Number(row.kostenMateriaal) || 0) + (Number(row.kostenArbeid) || 0) + (Number(row.kostenOverig) || 0) + (Number(row.kostenPakbon) || 0);
-        const uren = Number(row.urenTotaal)    || 0;
-        const calc = computeFinancials(ns, gef, ks, uren, "KEYSER", inputMap.get(row.projectNr));
-        stats.aanneemsom   += ns;
-        stats.gefactureerd += gef;
-        stats.totaleKosten += calc.totaleKosten;
-        stats.brutomarge   += calc.brutomarge;
-        stats.actief       += row.status === "ACTIEF" ? 1 : 0;
+        const ns    = Number(row.aanneemsom) || 0;
+        const gef   = Number(row.gefactureerd) || 0;
+        const dirk  = (Number(row.kostenMateriaal) || 0) + (Number(row.kostenArbeid) || 0) + (Number(row.kostenOverig) || 0);
+        const pbk   = Number(row.kostenPakbon) || 0;
+        const uren  = Number(row.urenTotaal) || 0;
+        const inp   = inputMap.get(row.projectNr);
+        const urenTarief   = Number(inp?.urenTarief   ?? DEFAULT_UREN_TARIEF["KEYSER"]);
+        const algKostenPct = Number(inp?.algKostenPct ?? DEFAULT_ALG_KOSTEN_PCT);
+        const indir = uren * urenTarief;
+        const alg   = ns * (algKostenPct / 100);
+        stats.directeKosten   += dirk;
+        stats.pakbonKosten    += pbk;
+        stats.indirecteKosten += indir;
+        stats.algemeenKosten  += alg;
+        stats.aanneemsom      += ns;
+        stats.gefactureerd    += gef;
+        stats.totaleKosten    += dirk + pbk + indir + alg;
+        stats.brutomarge      += gef - (dirk + pbk + indir + alg);
+        stats.actief          += row.status === "ACTIEF" ? 1 : 0;
         stats.totaal++;
       }
 
       stats.nietGefactureerd = stats.aanneemsom - stats.gefactureerd;
-      const margePct            = stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0;
-      const nietGefactureerdPct = stats.aanneemsom   > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0;
-
       return {
-        database,
-        label:               DB_LABELS[database],
+        database, label: DB_LABELS[database], source,
         aanneemsom:          r2(stats.aanneemsom),
         gefactureerd:        r2(stats.gefactureerd),
         totaleKosten:        r2(stats.totaleKosten),
         brutomarge:          r2(stats.brutomarge),
-        margePct:            r2(margePct),
+        margePct:            r2(stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0),
         nietGefactureerd:    r2(stats.nietGefactureerd),
-        nietGefactureerdPct: r2(nietGefactureerdPct),
+        nietGefactureerdPct: r2(stats.aanneemsom > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0),
         actief:              stats.actief,
         totaal:              stats.totaal,
-        source,
+        directeKosten:       r2(stats.directeKosten),
+        pakbonKosten:        r2(stats.pakbonKosten),
+        indirecteKosten:     r2(stats.indirecteKosten),
+        algemeenKosten:      r2(stats.algemeenKosten),
       };
     }
 
-    // ── MAINTENANCE: werkbon-type — gebruik rm_werkbon + rm_journaal ──
+    // ── MAINTENANCE: werkbon-type ─────────────────────────────────────────────
     if (database === "MAINTENANCE") {
       const wbCount = await db.rmWerkbon.count({
         where: { database: "MAINTENANCE" },
@@ -145,8 +130,6 @@ export async function GET(request: NextRequest) {
 
       if (wbCount > 0) {
         source = "read-model";
-
-        // Actief = bons die nog niet voltooid zijn (status != 'G' / 'V')
         const activeStatuses = ["A", "I", "te_doen", "loopt"];
         const wbWhere = statusFilter === "actueel"
           ? { database: "MAINTENANCE" as Database, status: { in: activeStatuses } }
@@ -161,40 +144,39 @@ export async function GET(request: NextRequest) {
           where: { database: "MAINTENANCE" as Database, status: { in: activeStatuses } },
         }).catch(() => 0);
 
-        // Gefactureerd = journaalomzet (8020+8300 credits) voor MAINTENANCE
         const journaalAgg = await db.rmJournaal.aggregate({
           where: { database: "MAINTENANCE" as Database, debetCredit: "C" },
           _sum: { bedrag: true },
         }).catch(() => ({ _sum: { bedrag: null } }));
 
-        const aanneemsom    = Number(wbAgg._sum.opbrengsten ?? 0);
-        const gefactureerd  = Number(journaalAgg._sum.bedrag ?? 0);
-        const urenTotaal    = Number(wbAgg._sum.urenWerkbon ?? 0);
-        const kostenIndirect = urenTotaal * 7.5;
-        const kostenAlgemeen = aanneemsom * (DEFAULT_ALG_KOSTEN_PCT / 100);
-        const totaleKosten   = kostenIndirect + kostenAlgemeen;
-        const brutomarge     = gefactureerd - totaleKosten;
-        const margePct       = totaleKosten > 0 ? brutomarge / totaleKosten * 100 : 0;
-        const nietGefactureerd    = aanneemsom - gefactureerd;
-        const nietGefactureerdPct = aanneemsom > 0 ? nietGefactureerd / aanneemsom * 100 : 0;
+        const aanneemsom      = Number(wbAgg._sum.opbrengsten ?? 0);
+        const gefactureerd    = Number(journaalAgg._sum.bedrag ?? 0);
+        const urenTotaal      = Number(wbAgg._sum.urenWerkbon ?? 0);
+        const indirecteKosten = urenTotaal * 7.5;
+        const algemeenKosten  = aanneemsom * (DEFAULT_ALG_KOSTEN_PCT / 100);
+        const totaleKosten    = indirecteKosten + algemeenKosten;
+        const brutomarge      = gefactureerd - totaleKosten;
+        const nietGefactureerd = aanneemsom - gefactureerd;
 
         return {
-          database,
-          label:               DB_LABELS[database],
+          database, label: DB_LABELS[database], source,
           aanneemsom:          r2(aanneemsom),
           gefactureerd:        r2(gefactureerd),
           totaleKosten:        r2(totaleKosten),
           brutomarge:          r2(brutomarge),
-          margePct:            r2(margePct),
+          margePct:            r2(totaleKosten > 0 ? brutomarge / totaleKosten * 100 : 0),
           nietGefactureerd:    r2(nietGefactureerd),
-          nietGefactureerdPct: r2(nietGefactureerdPct),
+          nietGefactureerdPct: r2(aanneemsom > 0 ? nietGefactureerd / aanneemsom * 100 : 0),
           actief:              wbActiveCount,
           totaal:              wbCount,
-          source,
+          directeKosten:       0,
+          pakbonKosten:        0,
+          indirecteKosten:     r2(indirecteKosten),
+          algemeenKosten:      r2(algemeenKosten),
         };
       }
 
-      // Geen werkbonnen in DB — mock fallback
+      // Geen werkbonnen — mock fallback
       let mockProjecten = getElmarProjecten(database);
       if (statusFilter === "actueel") mockProjecten = mockProjecten.filter(p => p.STATUS === "ACTIEF");
       for (const p of mockProjecten) {
@@ -206,26 +188,22 @@ export async function GET(request: NextRequest) {
         stats.totaal++;
       }
       stats.nietGefactureerd = stats.aanneemsom - stats.gefactureerd;
-      const margePctMock            = stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0;
-      const nietGefactureerdPctMock = stats.aanneemsom   > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0;
-
       return {
-        database,
-        label:               DB_LABELS[database],
+        database, label: DB_LABELS[database], source,
         aanneemsom:          r2(stats.aanneemsom),
         gefactureerd:        r2(stats.gefactureerd),
         totaleKosten:        r2(stats.totaleKosten),
         brutomarge:          r2(stats.brutomarge),
-        margePct:            r2(margePctMock),
+        margePct:            r2(stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0),
         nietGefactureerd:    r2(stats.nietGefactureerd),
-        nietGefactureerdPct: r2(nietGefactureerdPctMock),
+        nietGefactureerdPct: r2(stats.aanneemsom > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0),
         actief:              stats.actief,
         totaal:              stats.totaal,
-        source,
+        directeKosten: 0, pakbonKosten: 0, indirecteKosten: 0, algemeenKosten: 0,
       };
     }
 
-    // ── PROJECT-type (SERVICES / INTERNATIONAL) ────────────────────────────────
+    // ── PROJECT-type (SERVICES / INTERNATIONAL) ───────────────────────────────
     const rmCount = await db.rmProjectSummary.count({
       where: { database: database as Database, aanneemsom: { gte: 0 } },
     }).catch(() => 0);
@@ -243,25 +221,31 @@ export async function GET(request: NextRequest) {
       const inputMap = new Map(inputs.map(i => [i.projectCode, i]));
 
       for (const row of rows) {
-        const ns   = Number(row.aanneemsom)    || 0;
-        const gef  = Number(row.gefactureerd)  || 0;
-        const ks   = (Number(row.kostenMateriaal) || 0) + (Number(row.kostenArbeid) || 0) + (Number(row.kostenOverig) || 0) + (Number(row.kostenPakbon) || 0);
-        const uren = Number(row.urenTotaal)    || 0;
-        const input = inputMap.get(row.projectNr);
-        const calc = computeFinancials(ns, gef, ks, uren, database, input);
-
-        stats.aanneemsom    += ns;
-        stats.gefactureerd  += gef;
-        stats.totaleKosten  += calc.totaleKosten;
-        stats.brutomarge    += calc.brutomarge;
-        stats.actief        += row.status === "ACTIEF" ? 1 : 0;
+        const ns    = Number(row.aanneemsom) || 0;
+        const gef   = Number(row.gefactureerd) || 0;
+        const dirk  = (Number(row.kostenMateriaal) || 0) + (Number(row.kostenArbeid) || 0) + (Number(row.kostenOverig) || 0);
+        const pbk   = Number(row.kostenPakbon) || 0;
+        const uren  = Number(row.urenTotaal) || 0;
+        const inp   = inputMap.get(row.projectNr);
+        const urenTarief   = Number(inp?.urenTarief   ?? (DEFAULT_UREN_TARIEF[database] ?? 7.5));
+        const algKostenPct = Number(inp?.algKostenPct ?? DEFAULT_ALG_KOSTEN_PCT);
+        const indir = uren * urenTarief;
+        const alg   = ns * (algKostenPct / 100);
+        stats.directeKosten   += dirk;
+        stats.pakbonKosten    += pbk;
+        stats.indirecteKosten += indir;
+        stats.algemeenKosten  += alg;
+        stats.aanneemsom      += ns;
+        stats.gefactureerd    += gef;
+        stats.totaleKosten    += dirk + pbk + indir + alg;
+        stats.brutomarge      += gef - (dirk + pbk + indir + alg);
+        stats.actief          += row.status === "ACTIEF" ? 1 : 0;
         stats.totaal++;
       }
     } else {
       // Mock fallback
       let mockProjecten = getElmarProjecten(database);
       if (statusFilter === "actueel") mockProjecten = mockProjecten.filter(p => p.STATUS === "ACTIEF");
-
       for (const p of mockProjecten) {
         stats.aanneemsom   += p.TOTAAL_AANNEEMSOM;
         stats.gefactureerd += p.GEFACTUREERD_TOTAAL;
@@ -273,22 +257,21 @@ export async function GET(request: NextRequest) {
     }
 
     stats.nietGefactureerd = stats.aanneemsom - stats.gefactureerd;
-    const margePct             = stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0;
-    const nietGefactureerdPct  = stats.aanneemsom > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0;
-
     return {
-      database,
-      label:               DB_LABELS[database],
+      database, label: DB_LABELS[database], source,
       aanneemsom:          r2(stats.aanneemsom),
       gefactureerd:        r2(stats.gefactureerd),
       totaleKosten:        r2(stats.totaleKosten),
       brutomarge:          r2(stats.brutomarge),
-      margePct:            r2(margePct),
+      margePct:            r2(stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0),
       nietGefactureerd:    r2(stats.nietGefactureerd),
-      nietGefactureerdPct: r2(nietGefactureerdPct),
+      nietGefactureerdPct: r2(stats.aanneemsom > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0),
       actief:              stats.actief,
       totaal:              stats.totaal,
-      source,
+      directeKosten:       r2(stats.directeKosten),
+      pakbonKosten:        r2(stats.pakbonKosten),
+      indirecteKosten:     r2(stats.indirecteKosten),
+      algemeenKosten:      r2(stats.algemeenKosten),
     };
   }));
 
@@ -303,8 +286,12 @@ export async function GET(request: NextRequest) {
       actief:           acc.actief           + d.actief,
       totaal:           acc.totaal           + d.totaal,
       nietGefactureerd: acc.nietGefactureerd + d.nietGefactureerd,
+      directeKosten:    acc.directeKosten    + d.directeKosten,
+      pakbonKosten:     acc.pakbonKosten     + d.pakbonKosten,
+      indirecteKosten:  acc.indirecteKosten  + d.indirecteKosten,
+      algemeenKosten:   acc.algemeenKosten   + d.algemeenKosten,
     }),
-    { aanneemsom: 0, gefactureerd: 0, totaleKosten: 0, brutomarge: 0, actief: 0, totaal: 0, nietGefactureerd: 0 }
+    { aanneemsom: 0, gefactureerd: 0, totaleKosten: 0, brutomarge: 0, actief: 0, totaal: 0, nietGefactureerd: 0, directeKosten: 0, pakbonKosten: 0, indirecteKosten: 0, algemeenKosten: 0 }
   );
 
   return Response.json({

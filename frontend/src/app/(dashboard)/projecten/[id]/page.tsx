@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowLeft, Euro, TrendingUp, CheckCircle2, Calculator,
   Pencil, RotateCcw, Save, Loader2, ShieldCheck, AlertTriangle,
-  LayoutGrid, Table2, Info,
+  LayoutGrid, Table2, Info, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ElmarRapport } from "@/lib/mock/elmar-data";
@@ -45,15 +45,15 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function Row({
-  label, value, bold, green, orange,
+  label, value, bold, green, orange, disabled,
 }: {
   label: string; value: string | React.ReactNode;
-  bold?: boolean; green?: boolean; orange?: boolean;
+  bold?: boolean; green?: boolean; orange?: boolean; disabled?: boolean;
 }) {
   return (
-    <div className={`flex justify-between items-center py-2 ${bold ? "font-semibold" : ""}`}>
+    <div className={`flex justify-between items-center py-2 ${bold ? "font-semibold" : ""} ${disabled ? "opacity-40" : ""}`}>
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-sm tabular-nums ${bold ? "font-bold text-foreground" : ""} ${green ? "text-emerald-600 dark:text-emerald-400" : ""} ${orange ? "text-orange-600 dark:text-orange-400" : ""}`}>
+      <span className={`text-sm tabular-nums ${bold ? "font-bold text-foreground" : ""} ${!disabled && green ? "text-emerald-600 dark:text-emerald-400" : ""} ${!disabled && orange ? "text-orange-600 dark:text-orange-400" : ""} ${disabled ? "line-through" : ""}`}>
         {value}
       </span>
     </div>
@@ -69,12 +69,22 @@ function Td({ children, right, className = "" }: { children: React.ReactNode; ri
   return <td className={`px-4 py-3 text-sm ${right ? "text-right tabular-nums" : ""} ${className}`}>{children}</td>;
 }
 
-// ─── Rapport type with override fields ───────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type Toggles = { directe: boolean; pakbon: boolean; indirect: boolean; algemeen: boolean };
 
 type Rapport = ElmarRapport & {
   hasOverrides?: boolean;
   overriddenBy?: string;
   overriddenAt?: string;
+  _kosten?: {
+    materiaal: number;
+    arbeid: number;
+    overig: number;
+    pakbon: number;
+    indirect: number;
+    algemeen: number;
+  };
 };
 
 // ─── Edit panel ──────────────────────────────────────────────────────────────
@@ -425,6 +435,76 @@ function SpreadsheetView({ r }: { r: Rapport }) {
   );
 }
 
+// ─── Kosten-toggles panel ─────────────────────────────────────────────────────
+
+function KostenTogglesPanel({
+  kosten, toggles, setToggles,
+}: {
+  kosten: NonNullable<Rapport["_kosten"]>;
+  toggles: Toggles;
+  setToggles: React.Dispatch<React.SetStateAction<Toggles>>;
+}) {
+  const toggle = (k: keyof Toggles) => setToggles(t => ({ ...t, [k]: !t[k] }));
+  const allOn  = Object.values(toggles).every(Boolean);
+
+  const items: { key: keyof Toggles; label: string; amount: number }[] = [
+    { key: "directe",  label: "Directe kosten",   amount: kosten.materiaal + kosten.arbeid + kosten.overig },
+    { key: "pakbon",   label: "Pakbonnen",          amount: kosten.pakbon },
+    { key: "indirect", label: "Indirecte kosten",   amount: kosten.indirect },
+    { key: "algemeen", label: "Alg. kosten (5%)",   amount: kosten.algemeen },
+  ];
+
+  return (
+    <Card className="border-dashed border-blue-200/60 dark:border-blue-800/40">
+      <CardContent className="pt-4 pb-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-blue-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Kosten-toggles — simulatie weergave
+            </span>
+          </div>
+          {!allOn && (
+            <button
+              onClick={() => setToggles({ directe: true, pakbon: true, indirect: true, algemeen: true })}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Alles aan
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {items.map(({ key, label, amount }) => {
+            const on = toggles[key];
+            return (
+              <button
+                key={key}
+                onClick={() => toggle(key)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                  on
+                    ? "bg-card border-border hover:border-blue-400 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                    : "bg-muted/60 border-border/50 text-muted-foreground/50"
+                }`}
+              >
+                <span className={`h-2 w-2 rounded-full flex-shrink-0 ${on ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+                <span className={on ? "" : "line-through"}>{label}</span>
+                <span className={`font-mono tabular-nums ${on ? "text-foreground" : "text-muted-foreground/40"}`}>
+                  {formatCurrency(amount)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {!allOn && (
+          <p className="text-[11px] text-muted-foreground/60 mt-2">
+            Puur weergave — geen data-wijziging. Uitgeschakelde kostensoorten tellen niet mee in totale kosten en marge.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjectRapportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -453,6 +533,15 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
     enabled: !!id,
   });
 
+  const { data: me } = useQuery<{ role: string }>({
+    queryKey: ["me"],
+    queryFn: () => fetch("/api/auth/me").then(r => r.json()),
+    staleTime: 60_000,
+  });
+  const isMgm = me?.role === "MGM" || me?.role === "ADMIN";
+
+  const [toggles, setToggles] = useState<Toggles>({ directe: true, pakbon: true, indirect: true, algemeen: true });
+
   if (isLoading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -477,6 +566,18 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
   }
 
   const r = rapport;
+
+  // Effective cost values (apply toggles when _kosten is available and user is MGM/ADMIN)
+  const kd = r._kosten;
+  const useToggles = isMgm && !!kd;
+  const effectiefDirecte   = useToggles ? (toggles.directe  ? (kd.materiaal + kd.arbeid + kd.overig) : 0) : r.DIRECTE_KOSTEN;
+  const effectiefPakbon    = useToggles ? (toggles.pakbon    ? kd.pakbon   : 0) : (kd?.pakbon ?? 0);
+  const effectiefIndirect  = useToggles ? (toggles.indirect  ? kd.indirect : 0) : r.INDIRECTE_KOSTEN;
+  const effectiefAlgemeen  = useToggles ? (toggles.algemeen  ? kd.algemeen : 0) : r.ALG_KOSTEN;
+  const effectiefTotaal    = useToggles ? effectiefDirecte + effectiefPakbon + effectiefIndirect + effectiefAlgemeen : r.TOTALE_KOSTEN;
+  const effectiefMarge     = r.GEFACTUREERD_TOTAAL - effectiefTotaal;
+  const effectiefMargePct  = effectiefTotaal > 0 ? effectiefMarge / effectiefTotaal * 100 : 0;
+  const hasToggleEffect    = useToggles && !Object.values(toggles).every(Boolean);
 
   return (
     <div className="space-y-6 pb-10">
@@ -533,9 +634,9 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
       {/* 4 KPI cards — always visible */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Aanneemsom + Meerwerk" value={formatCurrency(r.TOTAAL_AANNEEMSOM)} sub={`incl. ${formatCurrency(r.MEERWERK)} meerwerk`} icon={Euro} color="blue" />
-        <StatCard label="Brutomarge" value={formatCurrency(r.BRUTOMARGE)} sub={`${formatPercentage(r.MARGE_PCT)} van gefactureerd`} icon={TrendingUp} color={r.BRUTOMARGE >= 0 ? "green" : "red"} />
+        <StatCard label="Brutomarge" value={formatCurrency(effectiefMarge)} sub={hasToggleEffect ? "gesimuleerd" : `${formatPercentage(r.MARGE_PCT)} van gefactureerd`} icon={TrendingUp} color={effectiefMarge >= 0 ? "green" : "red"} />
         <StatCard label="% Betaald" value={formatPercentage(r.PCT_BETAALD)} sub={`${formatCurrency(r.BETAALD_TOTAAL)} van ${formatCurrency(r.GEFACTUREERD_TOTAAL)}`} icon={CheckCircle2} color={r.PCT_BETAALD >= 90 ? "green" : r.PCT_BETAALD >= 50 ? "orange" : "red"} />
-        <StatCard label="Totale Kosten" value={formatCurrency(r.TOTALE_KOSTEN)} sub="direct + indirect + alg." icon={Calculator} color="slate" />
+        <StatCard label="Totale Kosten" value={formatCurrency(effectiefTotaal)} sub={hasToggleEffect ? "gesimuleerd" : "direct + indirect + alg."} icon={Calculator} color="slate" />
       </div>
 
       {/* Spreadsheet view */}
@@ -574,14 +675,21 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
             <Card>
               <CardHeader><CardTitle><SectionTitle>Kosten</SectionTitle></CardTitle></CardHeader>
               <CardContent className="text-sm">
-                <Row label="Directe kosten" value={formatCurrency(r.DIRECTE_KOSTEN)} />
-                <Row label={`Indirecte kosten (${r.UREN_AANTAL} uur × €${r.UREN_TARIEF}/uur)`} value={formatCurrency(r.INDIRECTE_KOSTEN)} />
-                <Row label={`Algemene kosten (${r.ALG_KOSTEN_PCT}% van aanneemsom + meerwerk)`} value={formatCurrency(r.ALG_KOSTEN)} />
+                {kd ? (
+                  <>
+                    <Row label="Directe kosten" value={formatCurrency(kd.materiaal + kd.arbeid + kd.overig)} disabled={useToggles && !toggles.directe} />
+                    <Row label="Pakbonnen" value={formatCurrency(kd.pakbon)} disabled={useToggles && !toggles.pakbon} />
+                  </>
+                ) : (
+                  <Row label="Directe kosten" value={formatCurrency(r.DIRECTE_KOSTEN)} />
+                )}
+                <Row label={`Indirecte kosten (${r.UREN_AANTAL} uur × €${r.UREN_TARIEF}/uur)`} value={formatCurrency(r.INDIRECTE_KOSTEN)} disabled={useToggles && !toggles.indirect} />
+                <Row label={`Algemene kosten (${r.ALG_KOSTEN_PCT}% van aanneemsom + meerwerk)`} value={formatCurrency(r.ALG_KOSTEN)} disabled={useToggles && !toggles.algemeen} />
                 <Divider />
-                <Row label="Totale kosten" value={formatCurrency(r.TOTALE_KOSTEN)} bold />
+                <Row label="Totale kosten" value={formatCurrency(effectiefTotaal)} bold />
                 <Divider />
-                <Row label="Brutomarge" value={formatCurrency(r.BRUTOMARGE)} bold green={r.BRUTOMARGE >= 0} orange={r.BRUTOMARGE < 0} />
-                <Row label="Marge %" value={formatPercentage(r.MARGE_PCT)} green={r.MARGE_PCT >= 0} orange={r.MARGE_PCT < 0} />
+                <Row label="Brutomarge" value={formatCurrency(effectiefMarge)} bold green={effectiefMarge >= 0} orange={effectiefMarge < 0} />
+                <Row label="Marge %" value={formatPercentage(effectiefMargePct)} green={effectiefMargePct >= 0} orange={effectiefMargePct < 0} />
               </CardContent>
             </Card>
           </div>
@@ -665,6 +773,11 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* Kosten-toggles — alleen voor MGM/ADMIN, alleen als _kosten beschikbaar */}
+      {isMgm && kd && (
+        <KostenTogglesPanel kosten={kd} toggles={toggles} setToggles={setToggles} />
       )}
 
       {/* Berekeningen aanpassen — always visible */}

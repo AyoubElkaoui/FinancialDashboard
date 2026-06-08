@@ -72,7 +72,14 @@ export async function GET(request: NextRequest) {
   }).catch(() => 0);
 
   if (rmCount === 0) {
-    // Nog niet gesynct — terugvallen op mock
+    // SERVICES: mock-fallback voor ontwikkeling
+    // Overige databases: "not-synced" — nooit nepdata tonen (leidt tot 404 op drill-down)
+    if (database !== "SERVICES" && database !== "ALL") {
+      return Response.json({
+        data: [], total: 0, page: 1, pageSize: 0, totalPages: 0,
+        _source: "not-synced",
+      });
+    }
     const all = database === "ALL"
       ? PROJECT_DATABASES.flatMap(db => getElmarProjecten(db))
       : getElmarProjecten(database);
@@ -83,7 +90,6 @@ export async function GET(request: NextRequest) {
           (p.KLANT ?? "").toLowerCase().includes(search)
         )
       : all;
-    // Sorteer mock op projectnummer-reeksgroep
     const sorted = [...filtered].sort((a, b) => {
       const ga = projectnrGroupKey(a.PROJECTNUMMER);
       const gb = projectnrGroupKey(b.PROJECTNUMMER);
