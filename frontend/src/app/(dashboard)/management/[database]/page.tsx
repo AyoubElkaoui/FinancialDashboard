@@ -260,7 +260,7 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
                       return (
                         <tr
                           key={p.PROJECTNUMMER}
-                          onClick={() => router.push(`/projecten/${encodeURIComponent(p.PROJECTNUMMER)}?database=${database}`)}
+                          onClick={() => router.push(`/management/${database}/${encodeURIComponent(p.PROJECTNUMMER)}`)}
                           className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors"
                         >
                           <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{p.PROJECTNUMMER}</td>
