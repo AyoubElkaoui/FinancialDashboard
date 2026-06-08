@@ -190,7 +190,7 @@ export function fetchJournaalAgg(adminId: number, fbDatabase?: string): FbJourna
   }));
 }
 
-/** Journaaldetails voor rm_journaal (grootboek-pagina), laatste 365 dagen. */
+/** Journaaldetails voor rm_journaal (kosten + opbrengsten per project, volledig). */
 export function fetchJournaalDetail(adminId: number, fbDatabase?: string): FbJournaalDetail[] {
   const rows = fbQuery(`
     SELECT
@@ -211,7 +211,6 @@ export function fetchJournaalDetail(adminId: number, fbDatabase?: string): FbJou
       AND j.WERK_GC_ID IS NOT NULL
       AND j.WERK_GC_ID <> 0
       AND r.TYPE_RUBRIEK IN ('W', 'B')
-      AND CAST(s.DOORBOEKDATUM AS DATE) >= CURRENT_DATE - 365
     ORDER BY s.DOORBOEKDATUM DESC;
   `, fbDatabase);
   return rows
@@ -464,7 +463,7 @@ export function fetchDebiteuren(fbDatabase?: string): number {
   return Math.max(0, parseFloat(rows[0]?.NETTO ?? "0") || 0);
 }
 
-/** Uren-details per medewerker/dag (rm_uren), laatste 365 dagen. */
+/** Uren-details per medewerker/dag (rm_uren), volledig. */
 export function fetchUrenDetail(adminId: number, fbDatabase?: string): FbUrenDetail[] {
   const rows = fbQuery(`
     SELECT
@@ -479,7 +478,6 @@ export function fetchUrenDetail(adminId: number, fbDatabase?: string): FbUrenDet
       SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
     )
       AND u.WERK_GC_ID IS NOT NULL
-      AND CAST(u.DATUM AS DATE) >= CURRENT_DATE - 365
     ORDER BY u.DATUM DESC;
   `, fbDatabase);
   return rows

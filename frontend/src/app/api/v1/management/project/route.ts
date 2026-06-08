@@ -200,6 +200,6 @@ export async function GET(request: NextRequest) {
     journaalOpbrengsten,
     urenDetail,
     urenPerMedewerker,
-    _journaalPeriode: journaalRaw.length > 0 ? "365 dagen" : null,
+    _journaalPeriode: journaalRaw.length > 0 ? "gesynchroniseerde periode" : null,
   });
 }
