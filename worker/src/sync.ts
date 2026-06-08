@@ -3,7 +3,7 @@ import {
   fetchProjecten, fetchRelaties, fetchOrderAgg,
   fetchJournaalAgg, fetchJournaalDetail,
   fetchUrenAgg, fetchUrenDetail, fetchRubrieken,
-  fetchDebiteuren, fetchWerkbonnen,
+  fetchDebiteuren, fetchWerkbonnen, fetchJournaalMaintenance,
 } from "./queries";
 import { buildRubriekMaps, aggregeerJournaal, round2 } from "./transform";
 import { ADMIN_CONFIG } from "./config";
@@ -121,15 +121,16 @@ async function upsertWerkbon(database: string, wb: {
   bonnummer: string; datum: string; omschrijving: string | null;
   status: string; methInUitvoering: string | null; fase: string | null;
   klant: string | null; eigenaar: string | null; werkCode: string | null;
-  isGefactureerd: boolean;
+  isGefactureerd: boolean; opbrengsten: number;
+  taakCode: string | null; urenWerkbon: number | null; urenContract: number | null;
 }): Promise<void> {
   await pgQuery(`
     INSERT INTO rm_werkbon
       (id, database, bonnummer, datum, omschrijving, status,
        meth_in_uitvoering, fase, klant, eigenaar, werk_code,
-       is_gefactureerd, synct_op)
+       is_gefactureerd, taak_code, opbrengsten, uren_werkbon, uren_contract, synct_op)
     VALUES
-      (gen_random_uuid(), $1, $2, $3::date, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+      (gen_random_uuid(), $1, $2, $3::date, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
     ON CONFLICT (database, bonnummer)
     DO UPDATE SET
       datum              = EXCLUDED.datum,
@@ -141,12 +142,16 @@ async function upsertWerkbon(database: string, wb: {
       eigenaar           = EXCLUDED.eigenaar,
       werk_code          = EXCLUDED.werk_code,
       is_gefactureerd    = EXCLUDED.is_gefactureerd,
+      taak_code          = EXCLUDED.taak_code,
+      opbrengsten        = EXCLUDED.opbrengsten,
+      uren_werkbon       = EXCLUDED.uren_werkbon,
+      uren_contract      = EXCLUDED.uren_contract,
       synct_op           = NOW()
-    -- Handmatige velden worden BEWUST niet bijgewerkt (NOOIT overschrijven)
   `, [
     database, wb.bonnummer, wb.datum, wb.omschrijving ?? null,
     wb.status, wb.methInUitvoering, wb.fase, wb.klant,
     wb.eigenaar, wb.werkCode, wb.isGefactureerd,
+    wb.taakCode, wb.opbrengsten, wb.urenWerkbon, wb.urenContract,
   ]);
 }
 
@@ -179,9 +184,33 @@ async function syncWerkbonnen(config: typeof ADMIN_CONFIG[0]): Promise<void> {
         eigenaar:         wb.EIGENAAR,
         werkCode:         wb.WERK_CODE,
         isGefactureerd:   wb.IS_GEFACTUREERD === "1",
+        taakCode:         wb.TAAK_CODE,
+        opbrengsten:      wb.OPBRENGSTEN,
+        urenWerkbon:      wb.UREN_WERKBON,
+        urenContract:     wb.UREN_CONTRACT,
       });
       geschreven++;
     }
+
+    // Omzet uit AT_JOURNAAL + AT_VERKFACT (8020 Periodiek + 8300 Service)
+    log("  Maintenance omzet laden (journaal + verkfact)...");
+    const journaalOmzet = fetchJournaalMaintenance(fbDatabase);
+    log(`  ${journaalOmzet.length} omzetregels gevonden`);
+
+    // Schrijf naar rm_journaal (verwijder eerst bestaande MAINTENANCE-regels)
+    await pgQuery(
+      `DELETE FROM rm_journaal WHERE database = $1 AND debet_credit = 'C' AND rubriek_code IN ('8020','8300')`,
+      [database]
+    );
+    for (const r of journaalOmzet) {
+      await pgQuery(`
+        INSERT INTO rm_journaal
+          (id, database, project_nr, datum, rubriek_code, rubriek_omschr,
+           type_rubriek, debet_credit, bedrag, omschrijving)
+        VALUES (gen_random_uuid(), $1, $2, $3::date, $4, $5, 'W', 'C', $6, NULL)
+      `, [database, r.CONTRACT_CODE, r.DATUM, r.RUBRIEK_CODE, r.RUBRIEK_OMSCHR, r.BEDRAG]);
+    }
+    log(`  ${journaalOmzet.length} omzetregels geschreven`);
 
     // Debiteuren voor Maintenance
     log("  Debiteuren laden...");

@@ -43,10 +43,11 @@ function betaaldCls(v: number) {
 function KpiSummary({ projecten }: { projecten: ElmarProjectSummary[] }) {
   const totOmzet   = projecten.reduce((s, p) => s + p.GEFACTUREERD_TOTAAL, 0);
   const totMarge   = projecten.reduce((s, p) => s + p.BRUTOMARGE, 0);
-  const totAannem  = projecten.reduce((s, p) => s + p.TOTAAL_AANNEEMSOM, 0);
+  const totKosten  = projecten.reduce((s, p) => s + p.TOTALE_KOSTEN, 0);
   const actief     = projecten.filter(p => p.STATUS === "ACTIEF").length;
   const negatief   = projecten.filter(p => p.BRUTOMARGE < 0).length;
-  const gemMarge   = totAannem > 0 ? (totMarge / totAannem) * 100 : 0;
+  // gem. marge % = totale brutomarge ÷ totale kosten (KH)
+  const gemMarge   = totKosten > 0 ? (totMarge / totKosten) * 100 : 0;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">

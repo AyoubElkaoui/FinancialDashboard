@@ -135,8 +135,9 @@ function BerekenenPanel({
   const previewAlg   = Math.round(rapport.DIRECTE_KOSTEN * (Number(algPct) || 0) / 100 * 100) / 100;
   const previewTotaal = rapport.DIRECTE_KOSTEN + previewIndir + previewAlg;
   const previewMarge  = Math.round((rapport.GEFACTUREERD_TOTAAL - previewTotaal) * 100) / 100;
-  const previewMargeP = rapport.GEFACTUREERD_TOTAAL > 0
-    ? Math.round(previewMarge / rapport.GEFACTUREERD_TOTAAL * 10000) / 100 : 0;
+  // KN = totale kosten
+  const previewMargeP = previewTotaal > 0
+    ? Math.round(previewMarge / previewTotaal * 10000) / 100 : 0;
 
   return (
     <Card className={rapport.hasOverrides ? "border-blue-500/40 ring-1 ring-blue-500/20" : ""}>
@@ -173,8 +174,8 @@ function BerekenenPanel({
         <div className="flex items-start gap-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 p-3 mb-4">
           <Info className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
           <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-            <strong>Brutomarge = Gefactureerd − Totale kosten</strong> &nbsp;·&nbsp; <strong>Marge % = Brutomarge ÷ Gefactureerd × 100</strong><br />
-            Totale kosten = Directe kosten + (Uren × Tarief) + Alg. kosten %. Pas uren, tarief of alg. kosten % aan om de marge te beïnvloeden.
+            <strong>Brutomarge = Gefactureerd − Totale kosten (KN)</strong> &nbsp;·&nbsp; <strong>Marge % = Brutomarge ÷ Totale kosten × 100</strong><br />
+            Totale kosten (KN) = Directe kosten + (Uren × Tarief) + Alg. kosten %. Pas uren, tarief of alg. kosten % aan om de marge te beïnvloeden.
           </p>
         </div>
 
@@ -624,6 +625,7 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
               <Row label="Totaal betaald" value={formatCurrency(r.BETAALD_TOTAAL)} green />
               <Row label="Onbetaald" value={formatCurrency(r.ONBETAALD_TOTAAL)} bold orange={r.ONBETAALD_TOTAAL > 0} />
               <Row label="% betaald" value={formatPercentage(r.PCT_BETAALD)} />
+              <Row label="Niet gefactureerd %" value={formatPercentage(r.NIET_GEFACTUREERD_PCT ?? 0)} orange={(r.NIET_GEFACTUREERD_PCT ?? 0) > 0} />
             </CardContent>
           </Card>
 

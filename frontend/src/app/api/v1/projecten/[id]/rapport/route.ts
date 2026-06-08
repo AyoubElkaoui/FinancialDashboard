@@ -54,8 +54,10 @@ export async function GET(
   const kostenAlgemeen = kostenSyntess * (algKostenPct / 100);
   const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
   const brutomarge     = gefactureerd - totaleKosten;
-  const margePct       = gefactureerd > 0 ? (brutomarge / gefactureerd) * 100 : 0;
+  // KN = totale kosten; marge % = brutomarge ÷ totale kosten × 100
+  const margePct       = totaleKosten > 0 ? (brutomarge / totaleKosten) * 100 : 0;
   const pctBetaald     = aanneemsom   > 0 ? (gefactureerd / aanneemsom)  * 100 : 0;
+  const nietGefactureerdPct = aanneemsom > 0 ? ((aanneemsom - gefactureerd) / aanneemsom) * 100 : 0;
   const betaald        = Math.max(0, gefactureerd - onbetaald);
 
   // Journaalregels als factuurproxy (credit 8xxx, laatste 365 dagen)
@@ -107,6 +109,7 @@ export async function GET(
     BETAALD_TOTAAL:    betaald,
     ONBETAALD_TOTAAL:  Math.max(0, onbetaald),
     PCT_BETAALD:       pctBetaald,
+    NIET_GEFACTUREERD_PCT: nietGefactureerdPct,
     BRUTOMARGE:        brutomarge,
     MARGE_PCT:         margePct,
     hasOverrides:  !!input,

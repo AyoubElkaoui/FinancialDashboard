@@ -47,6 +47,11 @@ const USERS: {
     role: "VIEWER",
     databases: ["SERVICES", "INTERNATIONAL", "KEYSER"],
   },
+  {
+    email: "yassin@elmarservices.com",
+    role: "VIEWER",
+    databases: ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"],
+  },
 ];
 
 const PASSWORD = process.env.SEED_PASSWORD ?? "Elmar2026!";

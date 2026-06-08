@@ -534,6 +534,7 @@ export interface ElmarRapport extends ElmarProject {
   BETAALD_TOTAAL: number;
   ONBETAALD_TOTAAL: number;
   PCT_BETAALD: number;
+  NIET_GEFACTUREERD_PCT: number;
   BRUTOMARGE: number;
   MARGE_PCT: number;
 }
@@ -569,7 +570,11 @@ function computeRapport(project: ElmarProject): ElmarRapport {
   const ONBETAALD_TOTAAL  = Math.round((GEFACTUREERD_TOTAAL - BETAALD_TOTAAL) * 100) / 100;
   const PCT_BETAALD       = GEFACTUREERD_TOTAAL > 0 ? Math.round(BETAALD_TOTAAL / GEFACTUREERD_TOTAAL * 10000) / 100 : 0;
   const BRUTOMARGE        = Math.round((GEFACTUREERD_TOTAAL - TOTALE_KOSTEN) * 100) / 100;
-  const MARGE_PCT         = GEFACTUREERD_TOTAAL > 0 ? Math.round(BRUTOMARGE / GEFACTUREERD_TOTAAL * 10000) / 100 : 0;
+  // KN = totale kosten; marge % = brutomarge ÷ totale kosten × 100
+  const MARGE_PCT         = TOTALE_KOSTEN > 0 ? Math.round(BRUTOMARGE / TOTALE_KOSTEN * 10000) / 100 : 0;
+  const NIET_GEFACTUREERD_PCT = TOTAAL_AANNEEMSOM > 0
+    ? Math.round((TOTAAL_AANNEEMSOM - GEFACTUREERD_TOTAAL) / TOTAAL_AANNEEMSOM * 10000) / 100
+    : 0;
 
   return {
     ...project,
@@ -581,6 +586,7 @@ function computeRapport(project: ElmarProject): ElmarRapport {
     BETAALD_TOTAAL,
     ONBETAALD_TOTAAL,
     PCT_BETAALD,
+    NIET_GEFACTUREERD_PCT,
     BRUTOMARGE,
     MARGE_PCT,
   };

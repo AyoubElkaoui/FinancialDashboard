@@ -249,15 +249,20 @@ export function fetchUrenAgg(adminId: number): FbUrenAgg[] {
 
 export interface FbWerkbon {
   BONNUMMER:          string;
-  DATUM:              string;     // YYYY-MM-DD
+  DATUM:              string;
   OMSCHRIJVING:       string | null;
-  STATUS:             string;     // A, I, U, V
-  METH_IN_UITVOERING: string | null; // W, G
+  STATUS:             string;
+  METH_IN_UITVOERING: string | null;
   FASE:               string | null;
   KLANT:              string | null;
   EIGENAAR:           string | null;
   WERK_CODE:          string | null;
-  IS_GEFACTUREERD:    string;     // "1" of "0"
+  IS_GEFACTUREERD:    string;
+  OPBRENGSTEN:        number;      // AT_KLNTBREG sum per bon (100% dekking)
+  WERK_GC_ID_RAW:     string | null;
+  TAAK_CODE:          string | null; // AT_TAAK.GC_CODE -> techniek W/E/CV/B
+  UREN_WERKBON:       number | null;
+  UREN_CONTRACT:      number | null;
 }
 
 /**
@@ -279,17 +284,31 @@ export function fetchWerkbonnen(fbDatabase: string): FbWerkbon[] {
       SUBSTRING(COALESCE(f.GC_OMSCHRIJVING,'') FROM 1 FOR 80) AS FASE,
       SUBSTRING(COALESCE(r.GC_OMSCHRIJVING,'') FROM 1 FOR 100) AS KLANT,
       SUBSTRING(COALESCE(m.GC_OMSCHRIJVING,'') FROM 1 FOR 60) AS EIGENAAR,
-      COALESCE(w.GC_CODE,'') AS WERK_CODE
+      COALESCE(w.GC_CODE,'') AS WERK_CODE,
+      COALESCE(CAST(wb.WERK_GC_ID AS VARCHAR(15)),'') AS WERK_GC_ID_RAW,
+      COALESCE(t.GC_CODE,'') AS TAAK_CODE
     FROM AT_WERKBON wb
     JOIN AT_DOCUMENT d ON d.GC_ID = wb.DOCUMENT_GC_ID
     LEFT JOIN AT_RELATIE r ON r.GC_ID = wb.RELATIE_GC_ID
     LEFT JOIN AT_MEDEW m ON m.GC_ID = d.EIG_MEDEW_GC_ID
     LEFT JOIN AT_WBADFASE f ON f.GC_ID = wb.WBADFASE_GC_ID
     LEFT JOIN AT_WERK w ON w.GC_ID = wb.WERK_GC_ID
+    LEFT JOIN AT_TAAK t ON t.GC_ID = wb.TAAK_GC_ID
     ORDER BY d.GC_BOEKDATUM DESC;
   `, fbDatabase);
 
-  // Query 2: welke bonnummers zijn gefactureerd? (via KLNTBREG → DOCUMENT.GC_CODE)
+  // Query 2: opbrengsten per bon (AT_KLNTBREG, 100% dekking)
+  const opbrRow = fbQuery<{ BONNUMMER: string; OPBRENGST: string }>(
+    `SELECT d.GC_CODE AS BONNUMMER, SUM(kb.GC_BEDRAG) AS OPBRENGST
+     FROM AT_KLNTBREG kb
+     JOIN AT_DOCUMENT d ON d.GC_ID = kb.WERKBON_GC_ID
+     WHERE kb.GC_BEDRAG > 0
+     GROUP BY d.GC_CODE;`,
+    fbDatabase
+  );
+  const opbrMap = new Map(opbrRow.map(r => [r.BONNUMMER?.trim() ?? "", parseFloat(r.OPBRENGST ?? "0") || 0]));
+
+  // Query 3: welke bonnummers zijn gefactureerd?
   const factRows = fbQuery<{ BONNUMMER: string }>(
     `SELECT DISTINCT d.GC_CODE AS BONNUMMER
      FROM AT_KLNTBREG kb
@@ -299,18 +318,92 @@ export function fetchWerkbonnen(fbDatabase: string): FbWerkbon[] {
   );
   const gefactureerdSet = new Set(factRows.map(r => r.BONNUMMER?.trim() ?? ""));
 
-  return rows.map(r => ({
-    BONNUMMER:          r.BONNUMMER?.trim() ?? "",
-    DATUM:              r.DATUM?.trim() ?? "",
-    OMSCHRIJVING:       r.OMSCHRIJVING?.trim() || null,
-    STATUS:             r.STATUS?.trim() ?? "",
-    METH_IN_UITVOERING: r.METH_IN_UITVOERING?.trim() || null,
-    FASE:               r.FASE?.trim() || null,
-    KLANT:              r.KLANT?.trim() || null,
-    EIGENAAR:           r.EIGENAAR?.trim() || null,
-    WERK_CODE:          r.WERK_CODE?.trim() || null,
-    IS_GEFACTUREERD:    gefactureerdSet.has(r.BONNUMMER?.trim() ?? "") ? "1" : "0",
-  }));
+  // Query 4a: uren per bon (AT_URENBREG.WERKBON_GC_ID, 23% dekking)
+  const urenRow = fbQuery<{ BONNUMMER: string; UREN: string }>(
+    `SELECT d.GC_CODE AS BONNUMMER, SUM(u.AANTAL) AS UREN
+     FROM AT_URENBREG u
+     JOIN AT_DOCUMENT d ON d.GC_ID = u.WERKBON_GC_ID
+     WHERE u.WERKBON_GC_ID IS NOT NULL
+     GROUP BY d.GC_CODE;`,
+    fbDatabase
+  );
+  const urenMap = new Map(urenRow.map(r => [r.BONNUMMER?.trim() ?? "", parseFloat(r.UREN ?? "0") || 0]));
+
+  // Query 4b: uren per WERK/contract (77% van de uren — niet bon-specifiek)
+  // Geeft het TOTAAL uren voor het hele contract, niet per individuele bon.
+  const urenWerkRow = fbQuery<{ WERK_GC_ID: string; UREN: string }>(
+    `SELECT u.WERK_GC_ID, SUM(u.AANTAL) AS UREN
+     FROM AT_URENBREG u
+     WHERE u.WERKBON_GC_ID IS NULL AND u.WERK_GC_ID IS NOT NULL
+     GROUP BY u.WERK_GC_ID;`,
+    fbDatabase
+  );
+  const urenWerkMap = new Map(urenWerkRow.map(r => [r.WERK_GC_ID?.trim() ?? "", parseFloat(r.UREN ?? "0") || 0]));
+
+  return rows.map(r => {
+    const bon = r.BONNUMMER?.trim() ?? "";
+    return {
+      BONNUMMER:          bon,
+      DATUM:              r.DATUM?.trim() ?? "",
+      OMSCHRIJVING:       r.OMSCHRIJVING?.trim() || null,
+      STATUS:             r.STATUS?.trim() ?? "",
+      METH_IN_UITVOERING: r.METH_IN_UITVOERING?.trim() || null,
+      FASE:               r.FASE?.trim() || null,
+      KLANT:              r.KLANT?.trim() || null,
+      EIGENAAR:           r.EIGENAAR?.trim() || null,
+      WERK_CODE:          r.WERK_CODE?.trim() || null,
+      IS_GEFACTUREERD:    gefactureerdSet.has(bon) ? "1" : "0",
+      OPBRENGSTEN:        opbrMap.get(bon) ?? 0,
+      WERK_GC_ID_RAW:     r.WERK_GC_ID_RAW?.trim() || null,
+      TAAK_CODE:          r.TAAK_CODE?.trim() || null,
+      UREN_WERKBON:       urenMap.get(bon) ?? null,
+      UREN_CONTRACT:      r.WERK_GC_ID_RAW?.trim() ? (urenWerkMap.get(r.WERK_GC_ID_RAW.trim()) ?? null) : null,
+    };
+  });
+}
+
+// ─── Maintenance journaal-omzet (AT_JOURNAAL + AT_VERKFACT) ──────────────────
+
+export interface FbMaintOmzetRegel {
+  CONTRACT_CODE: string;
+  DATUM:         string;   // YYYY-MM-DD (vf.DATUM_FACT)
+  RUBRIEK_CODE:  string;   // '8020' of '8300'
+  RUBRIEK_OMSCHR: string;
+  BEDRAG:        number;
+}
+
+/**
+ * Omzet uit verkoopfacturen voor Maintenance (AT_JOURNAAL + AT_VERKFACT).
+ * Alleen rubrieken 8020 (Periodiek) en 8300 (Service), creditzijde.
+ * Datumveld = vf.DATUM_FACT (factuurdatum, geverifieerd).
+ */
+export function fetchJournaalMaintenance(fbDatabase: string): FbMaintOmzetRegel[] {
+  const rows = fbQuery(`
+    SELECT
+      w.GC_CODE AS CONTRACT_CODE,
+      CAST(CAST(vf.DATUM_FACT AS DATE) AS VARCHAR(10)) AS DATUM,
+      r.GC_CODE AS RUBRIEK_CODE,
+      SUBSTRING(r.GC_OMSCHRIJVING FROM 1 FOR 80) AS RUBRIEK_OMSCHR,
+      j.BEDRAG AS BEDRAG
+    FROM AT_JOURNAAL j
+    JOIN AT_VERKFACT vf ON vf.DOCUMENT_GC_ID = j.DOCUMENT_GC_ID
+    JOIN AT_WERK     w  ON w.GC_ID = j.WERK_GC_ID
+    JOIN AT_RUBRIEK  r  ON r.GC_ID = j.RUBRIEK_GC_ID
+    WHERE j.DEBET_CREDIT = 'C'
+      AND w.GC_CODE STARTING WITH '400'
+      AND r.GC_CODE IN ('8020','8300')
+    ORDER BY vf.DATUM_FACT DESC;
+  `, fbDatabase);
+
+  return rows
+    .filter(r => r.CONTRACT_CODE && r.DATUM && r.RUBRIEK_CODE)
+    .map(r => ({
+      CONTRACT_CODE:  r.CONTRACT_CODE.trim(),
+      DATUM:          r.DATUM.trim(),
+      RUBRIEK_CODE:   r.RUBRIEK_CODE.trim(),
+      RUBRIEK_OMSCHR: r.RUBRIEK_OMSCHR?.trim() ?? "",
+      BEDRAG:         parseFloat(r.BEDRAG ?? "0") || 0,
+    }));
 }
 
 /**

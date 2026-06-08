@@ -44,6 +44,9 @@ export default function GebruikersPage() {
   const [role, setRole] = useState<"ADMIN" | "VIEWER">("VIEWER");
   const [databases, setDatabases] = useState<DbOption[]>([]);
 
+  const pwOk = password.length === 0 || password.length >= 12;
+  const canSubmit = !!email && password.length >= 12 && databases.length > 0;
+
   const toggleDb = (db: DbOption) =>
     setDatabases((prev) => (prev.includes(db) ? prev.filter((d) => d !== db) : [...prev, db]));
 
@@ -115,7 +118,15 @@ export default function GebruikersPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Wachtwoord (tijdelijk)</Label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={!pwOk ? "border-red-400 focus-visible:ring-red-400" : ""}
+                />
+                {!pwOk && (
+                  <p className="text-xs text-red-500">Minimaal 12 tekens vereist ({password.length}/12)</p>
+                )}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -151,7 +162,7 @@ export default function GebruikersPage() {
             <div className="flex gap-2">
               <Button
                 onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending || !email || !password || databases.length === 0}
+                disabled={createMutation.isPending || !canSubmit}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
