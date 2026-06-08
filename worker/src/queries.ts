@@ -245,6 +245,38 @@ export function fetchUrenAgg(adminId: number): FbUrenAgg[] {
   }));
 }
 
+export interface FbProjectleider {
+  WERK_GC_ID:   number;
+  PROJECTLEIDER: string;
+}
+
+/**
+ * Projectleider per werk via AT_ORDER.MEDEW_GC_ID → AT_MEDEW.
+ * Sommige projecten hebben meerdere orders; we nemen de alphabetisch eerste naam.
+ * Veld MEDEW_GC_ID op AT_ORDER: kandidaat per spec — verifieer bij afwijking.
+ */
+export function fetchProjectleiders(adminId: number): FbProjectleider[] {
+  const rows = fbQuery(`
+    SELECT
+      o.WERK_GC_ID,
+      MIN(COALESCE(m.GC_OMSCHRIJVING, '')) AS PROJECTLEIDER
+    FROM AT_ORDER o
+    JOIN AT_MEDEW m ON m.GC_ID = o.MEDEW_GC_ID
+    WHERE o.WERK_GC_ID IN (
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
+    )
+      AND o.MEDEW_GC_ID IS NOT NULL
+    GROUP BY o.WERK_GC_ID
+    ORDER BY o.WERK_GC_ID;
+  `);
+  return rows
+    .filter(r => r.WERK_GC_ID)
+    .map(r => ({
+      WERK_GC_ID:   toInt(r.WERK_GC_ID),
+      PROJECTLEIDER: (r.PROJECTLEIDER ?? "").trim(),
+    }));
+}
+
 // ─── Werkbon queries (Maintenance) ────────────────────────────────────────────
 
 export interface FbWerkbon {
@@ -455,5 +487,46 @@ export function fetchUrenDetail(adminId: number): FbUrenDetail[] {
       DATUM:       (r.DATUM ?? "").trim(),
       AANTAL:      toNum(r.AANTAL ?? "0"),
       OMSCHRIJVING: toNull(r.OMSCHRIJVING ?? ""),
+    }));
+}
+
+export interface FbPakbonKosten {
+  WERK_GC_ID:   number;
+  BEDRAG_PAKBON: number;
+}
+
+/**
+ * Pakbon-gerelateerde inkoopkosten per project.
+ * Koppeling: AT_INKBREG.PAKBON_GC_ID = AT_PAKBON.GC_ID
+ * Dagboekfilter: PB01 (Pakbon), PB02 (Pakbon F-gas), PB03 (Pakbon Maintenance) — PL01 UITSLUITEN
+ * Bedrag: AT_INKBREG.GC_BEDRAG (NIET BEDRAG_TOTAAL — die is 0)
+ *
+ * Nog-te-gaan kosten = pakbonnen ZONDER AT_INKBREG-koppeling (zeldzaam in recente data).
+ * De geboekte pakbon-kosten worden hier opgeteld bij de directe kosten.
+ *
+ * ⚠️ Veldnamen gebaseerd op schema-spec; verifieer AT_PAKBON.DOCUMENT_GC_ID bij afwijking.
+ */
+export function fetchPakbonKosten(adminId: number): FbPakbonKosten[] {
+  const rows = fbQuery(`
+    SELECT
+      ib.WERK_GC_ID,
+      SUM(ib.GC_BEDRAG) AS BEDRAG_PAKBON
+    FROM AT_INKBREG ib
+    JOIN AT_PAKBON pb ON pb.GC_ID = ib.PAKBON_GC_ID
+    JOIN AT_DOCUMENT d ON d.GC_ID = pb.DOCUMENT_GC_ID
+    JOIN AT_DAGBOEK dg ON dg.GC_ID = d.DAGBOEK_GC_ID
+    WHERE dg.GC_CODE IN ('PB01', 'PB02', 'PB03')
+      AND ib.WERK_GC_ID IN (
+        SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
+      )
+      AND ib.WERK_GC_ID IS NOT NULL
+    GROUP BY ib.WERK_GC_ID
+    ORDER BY ib.WERK_GC_ID;
+  `);
+  return rows
+    .filter(r => r.WERK_GC_ID)
+    .map(r => ({
+      WERK_GC_ID:   toInt(r.WERK_GC_ID),
+      BEDRAG_PAKBON: toNum(r.BEDRAG_PAKBON ?? "0"),
     }));
 }

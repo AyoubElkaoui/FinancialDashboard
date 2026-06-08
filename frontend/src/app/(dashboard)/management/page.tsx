@@ -24,7 +24,7 @@ interface DbStats {
   nietGefactureerdPct: number;
   actief: number;
   totaal: number;
-  source: string;
+  source: "read-model" | "mock" | "not-connected";
 }
 
 interface SamenvattingResponse {
@@ -210,25 +210,40 @@ export default function ManagementPage() {
                             {d.source === "mock" && (
                               <span className="text-[10px] text-muted-foreground/60 italic">mock</span>
                             )}
+                            {d.source === "not-connected" && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">niet gekoppeld</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {d.actief} actief / {d.totaal} totaal
+                          {d.source === "not-connected" ? "—" : `${d.actief} actief / ${d.totaal} totaal`}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(d.aanneemsom)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(d.gefactureerd)}</td>
-                        <td className={`px-4 py-3 text-right tabular-nums ${d.nietGefactureerd > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : "text-muted-foreground"}`}>
-                          {d.nietGefactureerd > 0 ? formatCurrency(d.nietGefactureerd) : "—"}
-                          {d.nietGefactureerdPct > 0 && (
-                            <span className="block text-[11px] text-orange-500/70">{formatPercentage(d.nietGefactureerdPct)}</span>
-                          )}
+                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                          {d.source === "not-connected" ? "—" : formatCurrency(d.aanneemsom)}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(d.totaleKosten)}</td>
-                        <td className={`px-4 py-3 text-right tabular-nums font-semibold ${d.brutomarge >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                          {formatCurrency(d.brutomarge)}
+                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                          {d.source === "not-connected" ? "—" : formatCurrency(d.gefactureerd)}
                         </td>
-                        <td className={`px-4 py-3 text-right tabular-nums ${margeCls(d.margePct)}`}>
-                          {formatPercentage(d.margePct)}
+                        <td className={`px-4 py-3 text-right tabular-nums ${d.source === "not-connected" ? "text-muted-foreground" : d.nietGefactureerd > 0 ? "text-orange-600 dark:text-orange-400 font-semibold" : d.nietGefactureerd < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                          {d.source === "not-connected" ? "—" : d.nietGefactureerd !== 0 ? (
+                            <>
+                              {formatCurrency(d.nietGefactureerd)}
+                              {d.nietGefactureerdPct !== 0 && (
+                                <span className={`block text-[11px] ${d.nietGefactureerd > 0 ? "text-orange-500/70" : "text-emerald-500/70"}`}>
+                                  {formatPercentage(d.nietGefactureerdPct)}
+                                </span>
+                              )}
+                            </>
+                          ) : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                          {d.source === "not-connected" ? "—" : formatCurrency(d.totaleKosten)}
+                        </td>
+                        <td className={`px-4 py-3 text-right tabular-nums font-semibold ${d.source === "not-connected" ? "text-muted-foreground" : d.brutomarge >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                          {d.source === "not-connected" ? "—" : formatCurrency(d.brutomarge)}
+                        </td>
+                        <td className={`px-4 py-3 text-right tabular-nums ${d.source === "not-connected" ? "text-muted-foreground" : margeCls(d.margePct)}`}>
+                          {d.source === "not-connected" ? "—" : formatPercentage(d.margePct)}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <ChevronRight className="h-4 w-4 text-muted-foreground/40 inline-block" />
@@ -273,9 +288,15 @@ export default function ManagementPage() {
                   </span>
                   <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                 </div>
-                <p className="text-lg font-bold tabular-nums">{formatCurrency(d.brutomarge)}</p>
-                <p className="text-xs text-muted-foreground">marge {formatPercentage(d.margePct)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{d.actief} actief / {d.totaal} projecten</p>
+                {d.source === "not-connected" ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-400 font-medium mt-1">Nog niet gekoppeld</p>
+                ) : (
+                  <>
+                    <p className="text-lg font-bold tabular-nums">{formatCurrency(d.brutomarge)}</p>
+                    <p className="text-xs text-muted-foreground">marge {formatPercentage(d.margePct)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{d.actief} actief / {d.totaal} projecten</p>
+                  </>
+                )}
               </button>
             ))}
           </div>

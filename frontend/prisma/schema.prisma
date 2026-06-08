@@ -156,17 +156,21 @@ model RmProjectSummary {
   naam            String
   klant           String   @default("")
   status          String   @default("ACTIEF")
+  projectleider   String?  @map("projectleider")
+  startdatum      DateTime? @db.Date @map("startdatum")
   aanneemsom      Decimal  @default(0) @db.Decimal(15, 2)
   gefactureerd    Decimal  @default(0) @db.Decimal(15, 2)
   onbetaald       Decimal  @default(0) @db.Decimal(15, 2)
   kostenMateriaal Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_materiaal")
   kostenArbeid    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_arbeid")
   kostenOverig    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_overig")
+  kostenPakbon    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_pakbon")
   urenTotaal      Decimal  @default(0) @db.Decimal(10, 2) @map("uren_totaal")
   synctOp         DateTime @default(now()) @updatedAt @map("synct_op")
 
   @@unique([database, projectNr])
   @@index([database])
+  @@index([database, projectleider])
   @@map("rm_project_summary")
 }
 

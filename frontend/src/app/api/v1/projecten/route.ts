@@ -32,7 +32,8 @@ function sortByProjectnr<T extends { projectNr: string }>(rows: T[]): T[] {
 
 function applyParams(row: {
   aanneemsom: unknown; gefactureerd: unknown;
-  kostenMateriaal: unknown; kostenArbeid: unknown; kostenOverig: unknown; urenTotaal: unknown;
+  kostenMateriaal: unknown; kostenArbeid: unknown; kostenOverig: unknown;
+  kostenPakbon?: unknown; urenTotaal: unknown;
 }, database: string, input?: { urenTarief: number | null; algKostenPct: number | null } | null) {
   const aanneemsom    = Number(row.aanneemsom)    || 0;
   const gefactureerd  = Number(row.gefactureerd)  || 0;
@@ -41,7 +42,8 @@ function applyParams(row: {
   const algKostenPct  = input?.algKostenPct  ?? DEFAULT_ALG_KOSTEN_PCT;
   const kostenSyntess = (Number(row.kostenMateriaal) || 0)
                       + (Number(row.kostenArbeid)    || 0)
-                      + (Number(row.kostenOverig)    || 0);
+                      + (Number(row.kostenOverig)    || 0)
+                      + (Number(row.kostenPakbon)    || 0);
   const kostenIndirect = (Number(row.urenTotaal) || 0) * urenTarief;
   const kostenAlgemeen = aanneemsom * (algKostenPct / 100);
   const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
@@ -142,6 +144,7 @@ export async function GET(request: NextRequest) {
       PROJECTNUMMER:      row.projectNr,
       NAAM:               row.naam,
       KLANT:              row.klant,
+      PROJECTLEIDER:      row.projectleider ?? "",
       STATUS:             row.status,
       AANNEEMSOM:         calc.aanneemsom,
       MEERWERK:           0,

@@ -132,7 +132,7 @@ function BerekenenPanel({
 
   // Live preview of recomputed values
   const previewIndir = (Number(uren) || 0) * (Number(tarief) || 0);
-  const previewAlg   = Math.round(rapport.DIRECTE_KOSTEN * (Number(algPct) || 0) / 100 * 100) / 100;
+  const previewAlg   = Math.round(rapport.TOTAAL_AANNEEMSOM * (Number(algPct) || 0) / 100 * 100) / 100;
   const previewTotaal = rapport.DIRECTE_KOSTEN + previewIndir + previewAlg;
   const previewMarge  = Math.round((rapport.GEFACTUREERD_TOTAAL - previewTotaal) * 100) / 100;
   // KN = totale kosten
@@ -576,7 +576,7 @@ export default function ProjectRapportPage({ params }: { params: Promise<{ id: s
               <CardContent className="text-sm">
                 <Row label="Directe kosten" value={formatCurrency(r.DIRECTE_KOSTEN)} />
                 <Row label={`Indirecte kosten (${r.UREN_AANTAL} uur × €${r.UREN_TARIEF}/uur)`} value={formatCurrency(r.INDIRECTE_KOSTEN)} />
-                <Row label={`Algemene kosten (${r.ALG_KOSTEN_PCT}% van directe kosten)`} value={formatCurrency(r.ALG_KOSTEN)} />
+                <Row label={`Algemene kosten (${r.ALG_KOSTEN_PCT}% van aanneemsom + meerwerk)`} value={formatCurrency(r.ALG_KOSTEN)} />
                 <Divider />
                 <Row label="Totale kosten" value={formatCurrency(r.TOTALE_KOSTEN)} bold />
                 <Divider />

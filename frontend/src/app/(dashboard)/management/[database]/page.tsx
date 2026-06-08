@@ -18,6 +18,7 @@ interface ProjectRow {
   PROJECTNUMMER: string;
   NAAM: string;
   KLANT: string;
+  PROJECTLEIDER: string;
   STATUS: string;
   AANNEEMSOM: number;
   MEERWERK: number;
@@ -76,8 +77,9 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
   const { database } = use(params);
   const router = useRouter();
 
-  const [status, setStatus]   = useState<"actueel" | "historisch">("actueel");
-  const [search, setSearch]   = useState("");
+  const [status, setStatus]       = useState<"actueel" | "historisch">("actueel");
+  const [search, setSearch]       = useState("");
+  const [plFilter, setPlFilter]   = useState("");
 
   const verbergLeeg = true;
   const pageSize    = 500;
@@ -97,6 +99,7 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
 
   const projecten: ProjectRow[] = (data?.data ?? []).filter(p => {
     if (status === "actueel" && p.STATUS !== "ACTIEF") return false;
+    if (plFilter && !p.PROJECTLEIDER?.toLowerCase().includes(plFilter.toLowerCase())) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -107,6 +110,9 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
     }
     return true;
   });
+
+  // Unieke projectleiders voor filter-dropdown
+  const alleProjectleiders = [...new Set((data?.data ?? []).map(p => p.PROJECTLEIDER).filter(Boolean))].sort();
 
   // Totals over filtered rows
   const totAanneemsom  = projecten.reduce((s, p) => s + p.TOTAAL_AANNEEMSOM, 0);
@@ -140,6 +146,21 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
         <span className="text-xs text-muted-foreground">Status:</span>
         <FilterChip label="Actueel" active={status === "actueel"} onClick={() => setStatus("actueel")} />
         <FilterChip label="Historisch" active={status === "historisch"} onClick={() => setStatus("historisch")} />
+        {alleProjectleiders.length > 0 && (
+          <>
+            <span className="text-xs text-muted-foreground ml-2">Projectleider:</span>
+            <select
+              value={plFilter}
+              onChange={e => setPlFilter(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Alle</option>
+              {alleProjectleiders.map(pl => (
+                <option key={pl} value={pl}>{pl}</option>
+              ))}
+            </select>
+          </>
+        )}
         <div className="flex-1" />
         <Input
           placeholder="Zoeken op naam, nummer, klant…"
@@ -201,11 +222,11 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40">
-                      {["Projectnr.", "Naam", "Klant", "Status",
+                      {["Projectnr.", "Naam", "Klant", "Projectleider", "Status",
                         "Aanneemsom", "Gefactureerd", "Niet-gefact. %",
                         "Totale kosten", "Brutomarge", "Marge %", ""
                       ].map((h, i) => (
-                        <th key={h+i} className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap ${i >= 4 ? "text-right" : "text-left"}`}>
+                        <th key={h+i} className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap ${i >= 5 ? "text-right" : "text-left"}`}>
                           {h}
                         </th>
                       ))}
@@ -223,8 +244,9 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
                           className="border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors"
                         >
                           <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{p.PROJECTNUMMER}</td>
-                          <td className="px-3 py-2.5 font-medium max-w-[200px] truncate">{p.NAAM}</td>
-                          <td className="px-3 py-2.5 text-muted-foreground max-w-[150px] truncate">{p.KLANT}</td>
+                          <td className="px-3 py-2.5 font-medium max-w-[180px] truncate">{p.NAAM}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground max-w-[130px] truncate">{p.KLANT}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground max-w-[120px] truncate text-xs">{p.PROJECTLEIDER || "—"}</td>
                           <td className="px-3 py-2.5 whitespace-nowrap"><StatusBadge status={p.STATUS} /></td>
                           <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>

@@ -4,6 +4,7 @@ import {
   fetchJournaalAgg, fetchJournaalDetail,
   fetchUrenAgg, fetchUrenDetail, fetchRubrieken,
   fetchDebiteuren, fetchWerkbonnen, fetchJournaalMaintenance,
+  fetchProjectleiders, fetchPakbonKosten,
 } from "./queries";
 import { buildRubriekMaps, aggregeerJournaal, round2 } from "./transform";
 import { ADMIN_CONFIG } from "./config";
@@ -35,32 +36,38 @@ async function upsertSyncMeta(database: string, status: string, extra: {
 
 async function upsertProjectSummary(row: {
   database: string; projectNr: string; naam: string; klant: string;
+  projectleider?: string | null;
   aanneemsom: number; gefactureerd: number; onbetaald: number;
   kostenMateriaal: number; kostenArbeid: number; kostenOverig: number;
+  kostenPakbon: number;
   urenTotaal: number;
 }): Promise<void> {
   await pgQuery(`
     INSERT INTO rm_project_summary
-      (id, database, project_nr, naam, klant, status, aanneemsom, gefactureerd,
-       onbetaald, kosten_materiaal, kosten_arbeid, kosten_overig, uren_totaal, synct_op)
+      (id, database, project_nr, naam, klant, projectleider, status, aanneemsom, gefactureerd,
+       onbetaald, kosten_materiaal, kosten_arbeid, kosten_overig, kosten_pakbon, uren_totaal, synct_op)
     VALUES
-      (gen_random_uuid(), $1, $2, $3, $4, 'ACTIEF', $5, $6, $7, $8, $9, $10, $11, NOW())
+      (gen_random_uuid(), $1, $2, $3, $4, $5, 'ACTIEF', $6, $7, $8, $9, $10, $11, $12, $13, NOW())
     ON CONFLICT (database, project_nr)
     DO UPDATE SET
       naam             = EXCLUDED.naam,
       klant            = EXCLUDED.klant,
+      projectleider    = EXCLUDED.projectleider,
       aanneemsom       = EXCLUDED.aanneemsom,
       gefactureerd     = EXCLUDED.gefactureerd,
       onbetaald        = EXCLUDED.onbetaald,
       kosten_materiaal = EXCLUDED.kosten_materiaal,
       kosten_arbeid    = EXCLUDED.kosten_arbeid,
       kosten_overig    = EXCLUDED.kosten_overig,
+      kosten_pakbon    = EXCLUDED.kosten_pakbon,
       uren_totaal      = EXCLUDED.uren_totaal,
       synct_op         = NOW()
   `, [
     row.database, row.projectNr, row.naam, row.klant,
+    row.projectleider ?? null,
     row.aanneemsom, row.gefactureerd, row.onbetaald,
     row.kostenMateriaal, row.kostenArbeid, row.kostenOverig,
+    row.kostenPakbon,
     row.urenTotaal,
   ]);
 }
@@ -283,6 +290,28 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
     const urenAgg = fetchUrenAgg(adminId);
     const urenMap = new Map(urenAgg.map(u => [u.WERK_GC_ID, round2(u.UREN_TOTAAL)]));
 
+    // 6b. Projectleiders via AT_ORDER.MEDEW_GC_ID → AT_MEDEW
+    log("  Projectleiders laden...");
+    let projectleiderMap = new Map<number, string>();
+    try {
+      const plRows = fetchProjectleiders(adminId);
+      projectleiderMap = new Map(plRows.map(p => [p.WERK_GC_ID, p.PROJECTLEIDER]));
+      log(`  ${plRows.length} projectleiders gevonden`);
+    } catch (err) {
+      log(`  Projectleiders overgeslagen (veld niet beschikbaar): ${err}`);
+    }
+
+    // 6c. Pakbon-kosten (AT_INKBREG + AT_PAKBON, dagboeken PB01/02/03)
+    log("  Pakbon-kosten laden...");
+    let pakbonMap = new Map<number, number>();
+    try {
+      const pbRows = fetchPakbonKosten(adminId);
+      pakbonMap = new Map(pbRows.map(p => [p.WERK_GC_ID, p.BEDRAG_PAKBON]));
+      log(`  ${pbRows.length} projecten met pakbon-kosten`);
+    } catch (err) {
+      log(`  Pakbon-kosten overgeslagen (tabel niet beschikbaar): ${err}`);
+    }
+
     // 7. Company-level debiteuren (1300-saldo, niet project-gekoppeld)
     log("  Debiteuren laden...");
     const totaalDebiteuren = fetchDebiteuren();
@@ -312,12 +341,14 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
         klant:           project.OPD_RELATIE_GC_ID
           ? (klantMap.get(project.OPD_RELATIE_GC_ID) ?? "")
           : "",
+        projectleider:   projectleiderMap.get(project.GC_ID) ?? null,
         aanneemsom:      aanneesomMap.get(project.GC_ID) ?? 0,
         gefactureerd:    round2(agg.gefactureerd),
         onbetaald:       round2(agg.onbetaald),
         kostenMateriaal: round2(agg.kostenMat),
         kostenArbeid:    round2(agg.kostenArb),
         kostenOverig:    round2(agg.kostenOvg),
+        kostenPakbon:    round2(pakbonMap.get(project.GC_ID) ?? 0),
         urenTotaal:      urenMap.get(project.GC_ID) ?? 0,
       });
     }

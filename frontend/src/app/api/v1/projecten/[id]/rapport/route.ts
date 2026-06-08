@@ -56,7 +56,8 @@ export async function GET(
   const urenTotaal    = Number(rm.urenTotaal)    || 0;
   const kostenSyntess = (Number(rm.kostenMateriaal) || 0)
                       + (Number(rm.kostenArbeid)    || 0)
-                      + (Number(rm.kostenOverig)    || 0);
+                      + (Number(rm.kostenOverig)    || 0)
+                      + (Number(rm.kostenPakbon)    || 0);  // pakbon-kosten (A8)
   const kostenIndirect = urenTotaal * urenTarief;
   const kostenAlgemeen = aanneemsom * (algKostenPct / 100);
   const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
@@ -95,9 +96,9 @@ export async function GET(
     PROJECTNUMMER:   rm.projectNr,
     NAAM:            rm.naam,
     KLANT:           rm.klant,
-    PROJECTLEIDER:   "",
+    PROJECTLEIDER:   rm.projectleider ?? "",
     STATUS:          rm.status,
-    STARTDATUM:      "",
+    STARTDATUM:      rm.startdatum ? (rm.startdatum instanceof Date ? rm.startdatum.toISOString().slice(0, 10) : String(rm.startdatum).slice(0, 10)) : "",
     EINDDATUM:       null,
     AANNEEMSOM:      aanneemsom,
     MEERWERK:        0,
@@ -126,6 +127,7 @@ export async function GET(
       materiaal: Number(rm.kostenMateriaal) || 0,
       arbeid:    Number(rm.kostenArbeid)    || 0,
       overig:    Number(rm.kostenOverig)    || 0,
+      pakbon:    Number(rm.kostenPakbon)    || 0,
       indirect:  kostenIndirect,
       algemeen:  kostenAlgemeen,
     },

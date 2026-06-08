@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
   }
 
   const s             = request.nextUrl.searchParams;
-  const statusFilter  = s.get("status") ?? "actueel";   // actueel | historisch
+  const statusFilter  = s.get("status") ?? "actueel";
   const databaseParam = s.get("database") ?? "ALL";
 
   const databases = databaseParam === "ALL"
@@ -64,14 +64,171 @@ export async function GET(request: NextRequest) {
 
   const perDatabase = await Promise.all(databases.map(async (database) => {
     const stats = emptyStats();
-    let source: "read-model" | "mock" = "mock";
+    let source: "read-model" | "mock" | "not-connected" = "mock";
 
-    // MAINTENANCE heeft geen rm_project_summary (werkbon-type) — altijd mock
-    const rmCount = database !== "MAINTENANCE"
-      ? await db.rmProjectSummary.count({
-          where: { database: database as Database, aanneemsom: { gte: 0 } },
-        }).catch(() => 0)
-      : 0;
+    // ── KEYSER: check of env-vars zijn gezet (adminId 0 = niet geconfigureerd) ──
+    if (database === "KEYSER") {
+      const rmCount = await db.rmProjectSummary.count({
+        where: { database: "KEYSER", aanneemsom: { gte: 0 } },
+      }).catch(() => 0);
+
+      if (rmCount === 0) {
+        // Nog niet gekoppeld: toon placeholder, geen mock-cijfers
+        source = "not-connected";
+        return {
+          database,
+          label:               DB_LABELS[database],
+          aanneemsom:          0,
+          gefactureerd:        0,
+          totaleKosten:        0,
+          brutomarge:          0,
+          margePct:            0,
+          nietGefactureerd:    0,
+          nietGefactureerdPct: 0,
+          actief:              0,
+          totaal:              0,
+          source,
+        };
+      }
+
+      // KEYSER heeft data — lees read-model (project-type)
+      source = "read-model";
+      const whereStatus = statusFilter === "actueel" ? { status: "ACTIEF" } : {};
+      const rows = await db.rmProjectSummary.findMany({
+        where: { database: "KEYSER", aanneemsom: { gte: 0 }, ...whereStatus },
+      });
+      const codes = rows.map(r => r.projectNr);
+      const inputs = await db.projectInput.findMany({
+        where: { database: "KEYSER", projectCode: { in: codes } },
+      });
+      const inputMap = new Map(inputs.map(i => [i.projectCode, i]));
+
+      for (const row of rows) {
+        const ns   = Number(row.aanneemsom)    || 0;
+        const gef  = Number(row.gefactureerd)  || 0;
+        const ks   = (Number(row.kostenMateriaal) || 0) + (Number(row.kostenArbeid) || 0) + (Number(row.kostenOverig) || 0) + (Number(row.kostenPakbon) || 0);
+        const uren = Number(row.urenTotaal)    || 0;
+        const calc = computeFinancials(ns, gef, ks, uren, "KEYSER", inputMap.get(row.projectNr));
+        stats.aanneemsom   += ns;
+        stats.gefactureerd += gef;
+        stats.totaleKosten += calc.totaleKosten;
+        stats.brutomarge   += calc.brutomarge;
+        stats.actief       += row.status === "ACTIEF" ? 1 : 0;
+        stats.totaal++;
+      }
+
+      stats.nietGefactureerd = stats.aanneemsom - stats.gefactureerd;
+      const margePct            = stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0;
+      const nietGefactureerdPct = stats.aanneemsom   > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0;
+
+      return {
+        database,
+        label:               DB_LABELS[database],
+        aanneemsom:          r2(stats.aanneemsom),
+        gefactureerd:        r2(stats.gefactureerd),
+        totaleKosten:        r2(stats.totaleKosten),
+        brutomarge:          r2(stats.brutomarge),
+        margePct:            r2(margePct),
+        nietGefactureerd:    r2(stats.nietGefactureerd),
+        nietGefactureerdPct: r2(nietGefactureerdPct),
+        actief:              stats.actief,
+        totaal:              stats.totaal,
+        source,
+      };
+    }
+
+    // ── MAINTENANCE: werkbon-type — gebruik rm_werkbon + rm_journaal ──
+    if (database === "MAINTENANCE") {
+      const wbCount = await db.rmWerkbon.count({
+        where: { database: "MAINTENANCE" },
+      }).catch(() => 0);
+
+      if (wbCount > 0) {
+        source = "read-model";
+
+        // Actief = bons die nog niet voltooid zijn (status != 'G' / 'V')
+        const activeStatuses = ["A", "I", "te_doen", "loopt"];
+        const wbWhere = statusFilter === "actueel"
+          ? { database: "MAINTENANCE" as Database, status: { in: activeStatuses } }
+          : { database: "MAINTENANCE" as Database };
+
+        const wbAgg = await db.rmWerkbon.aggregate({
+          where: wbWhere,
+          _sum:  { opbrengsten: true, urenWerkbon: true },
+          _count: { _all: true },
+        });
+        const wbActiveCount = await db.rmWerkbon.count({
+          where: { database: "MAINTENANCE" as Database, status: { in: activeStatuses } },
+        }).catch(() => 0);
+
+        // Gefactureerd = journaalomzet (8020+8300 credits) voor MAINTENANCE
+        const journaalAgg = await db.rmJournaal.aggregate({
+          where: { database: "MAINTENANCE" as Database, debetCredit: "C" },
+          _sum: { bedrag: true },
+        }).catch(() => ({ _sum: { bedrag: null } }));
+
+        const aanneemsom    = Number(wbAgg._sum.opbrengsten ?? 0);
+        const gefactureerd  = Number(journaalAgg._sum.bedrag ?? 0);
+        const urenTotaal    = Number(wbAgg._sum.urenWerkbon ?? 0);
+        const kostenIndirect = urenTotaal * 7.5;
+        const kostenAlgemeen = aanneemsom * (DEFAULT_ALG_KOSTEN_PCT / 100);
+        const totaleKosten   = kostenIndirect + kostenAlgemeen;
+        const brutomarge     = gefactureerd - totaleKosten;
+        const margePct       = totaleKosten > 0 ? brutomarge / totaleKosten * 100 : 0;
+        const nietGefactureerd    = aanneemsom - gefactureerd;
+        const nietGefactureerdPct = aanneemsom > 0 ? nietGefactureerd / aanneemsom * 100 : 0;
+
+        return {
+          database,
+          label:               DB_LABELS[database],
+          aanneemsom:          r2(aanneemsom),
+          gefactureerd:        r2(gefactureerd),
+          totaleKosten:        r2(totaleKosten),
+          brutomarge:          r2(brutomarge),
+          margePct:            r2(margePct),
+          nietGefactureerd:    r2(nietGefactureerd),
+          nietGefactureerdPct: r2(nietGefactureerdPct),
+          actief:              wbActiveCount,
+          totaal:              wbCount,
+          source,
+        };
+      }
+
+      // Geen werkbonnen in DB — mock fallback
+      let mockProjecten = getElmarProjecten(database);
+      if (statusFilter === "actueel") mockProjecten = mockProjecten.filter(p => p.STATUS === "ACTIEF");
+      for (const p of mockProjecten) {
+        stats.aanneemsom   += p.TOTAAL_AANNEEMSOM;
+        stats.gefactureerd += p.GEFACTUREERD_TOTAAL;
+        stats.totaleKosten += p.TOTALE_KOSTEN;
+        stats.brutomarge   += p.BRUTOMARGE;
+        stats.actief       += p.STATUS === "ACTIEF" ? 1 : 0;
+        stats.totaal++;
+      }
+      stats.nietGefactureerd = stats.aanneemsom - stats.gefactureerd;
+      const margePctMock            = stats.totaleKosten > 0 ? stats.brutomarge / stats.totaleKosten * 100 : 0;
+      const nietGefactureerdPctMock = stats.aanneemsom   > 0 ? stats.nietGefactureerd / stats.aanneemsom * 100 : 0;
+
+      return {
+        database,
+        label:               DB_LABELS[database],
+        aanneemsom:          r2(stats.aanneemsom),
+        gefactureerd:        r2(stats.gefactureerd),
+        totaleKosten:        r2(stats.totaleKosten),
+        brutomarge:          r2(stats.brutomarge),
+        margePct:            r2(margePctMock),
+        nietGefactureerd:    r2(stats.nietGefactureerd),
+        nietGefactureerdPct: r2(nietGefactureerdPctMock),
+        actief:              stats.actief,
+        totaal:              stats.totaal,
+        source,
+      };
+    }
+
+    // ── PROJECT-type (SERVICES / INTERNATIONAL) ────────────────────────────────
+    const rmCount = await db.rmProjectSummary.count({
+      where: { database: database as Database, aanneemsom: { gte: 0 } },
+    }).catch(() => 0);
 
     if (rmCount > 0) {
       source = "read-model";
@@ -88,7 +245,7 @@ export async function GET(request: NextRequest) {
       for (const row of rows) {
         const ns   = Number(row.aanneemsom)    || 0;
         const gef  = Number(row.gefactureerd)  || 0;
-        const ks   = (Number(row.kostenMateriaal) || 0) + (Number(row.kostenArbeid) || 0) + (Number(row.kostenOverig) || 0);
+        const ks   = (Number(row.kostenMateriaal) || 0) + (Number(row.kostenArbeid) || 0) + (Number(row.kostenOverig) || 0) + (Number(row.kostenPakbon) || 0);
         const uren = Number(row.urenTotaal)    || 0;
         const input = inputMap.get(row.projectNr);
         const calc = computeFinancials(ns, gef, ks, uren, database, input);
@@ -135,8 +292,9 @@ export async function GET(request: NextRequest) {
     };
   }));
 
-  // Consolidated totals
-  const totaal = perDatabase.reduce(
+  // Consolidated totals — not-connected databases tellen niet mee
+  const connectedDbs = perDatabase.filter(d => d.source !== "not-connected");
+  const totaal = connectedDbs.reduce(
     (acc, d) => ({
       aanneemsom:       acc.aanneemsom       + d.aanneemsom,
       gefactureerd:     acc.gefactureerd     + d.gefactureerd,
