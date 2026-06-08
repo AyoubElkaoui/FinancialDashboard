@@ -36,6 +36,7 @@ async function upsertSyncMeta(database: string, status: string, extra: {
 
 async function upsertProjectSummary(row: {
   database: string; projectNr: string; naam: string; klant: string;
+  status: string;
   projectleider?: string | null;
   aanneemsom: number; gefactureerd: number; onbetaald: number;
   kostenMateriaal: number; kostenArbeid: number; kostenOverig: number;
@@ -47,12 +48,13 @@ async function upsertProjectSummary(row: {
       (id, database, project_nr, naam, klant, projectleider, status, aanneemsom, gefactureerd,
        onbetaald, kosten_materiaal, kosten_arbeid, kosten_overig, kosten_pakbon, uren_totaal, synct_op)
     VALUES
-      (gen_random_uuid(), $1, $2, $3, $4, $5, 'ACTIEF', $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+      (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
     ON CONFLICT (database, project_nr)
     DO UPDATE SET
       naam             = EXCLUDED.naam,
       klant            = EXCLUDED.klant,
       projectleider    = EXCLUDED.projectleider,
+      status           = EXCLUDED.status,
       aanneemsom       = EXCLUDED.aanneemsom,
       gefactureerd     = EXCLUDED.gefactureerd,
       onbetaald        = EXCLUDED.onbetaald,
@@ -65,6 +67,7 @@ async function upsertProjectSummary(row: {
   `, [
     row.database, row.projectNr, row.naam, row.klant,
     row.projectleider ?? null,
+    row.status,
     row.aanneemsom, row.gefactureerd, row.onbetaald,
     row.kostenMateriaal, row.kostenArbeid, row.kostenOverig,
     row.kostenPakbon,
@@ -341,6 +344,7 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
         klant:           project.OPD_RELATIE_GC_ID
           ? (klantMap.get(project.OPD_RELATIE_GC_ID) ?? "")
           : "",
+        status:          project.GC_HISTORISCH_JN === "J" ? "HISTORISCH" : "ACTIEF",
         projectleider:   projectleiderMap.get(project.GC_ID) ?? null,
         aanneemsom:      aanneesomMap.get(project.GC_ID) ?? 0,
         gefactureerd:    round2(agg.gefactureerd),

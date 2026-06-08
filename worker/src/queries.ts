@@ -24,6 +24,7 @@ export interface FbWerk {
   GC_CODE:            string;
   GC_OMSCHRIJVING:    string;
   OPD_RELATIE_GC_ID:  number | null;
+  GC_HISTORISCH_JN:   string;  // 'N' = actueel, 'J' = historisch
 }
 
 export interface FbRelatie {
@@ -98,7 +99,8 @@ export function fetchRubrieken(): FbRubriek[] {
 /** Alle projecten (AT_WERK) voor één administratie. */
 export function fetchProjecten(adminId: number): FbWerk[] {
   const rows = fbQuery(`
-    SELECT GC_ID, GC_CODE, GC_OMSCHRIJVING, OPD_RELATIE_GC_ID
+    SELECT GC_ID, GC_CODE, GC_OMSCHRIJVING, OPD_RELATIE_GC_ID,
+           COALESCE(TRIM(GC_HISTORISCH_JN), 'N') AS GC_HISTORISCH_JN
     FROM AT_WERK
     WHERE ADMINIS_GC_ID = ${adminId}
       AND GC_CODE IS NOT NULL
@@ -109,6 +111,7 @@ export function fetchProjecten(adminId: number): FbWerk[] {
     GC_CODE:           r.GC_CODE.trim(),
     GC_OMSCHRIJVING:   r.GC_OMSCHRIJVING.trim(),
     OPD_RELATIE_GC_ID: r.OPD_RELATIE_GC_ID ? toInt(r.OPD_RELATIE_GC_ID) : null,
+    GC_HISTORISCH_JN:  (r.GC_HISTORISCH_JN ?? "N").trim(),
   }));
 }
 
