@@ -169,6 +169,10 @@ async function upsertWerkbon(database: string, wb: {
 
 async function syncWerkbonnen(config: typeof ADMIN_CONFIG[0]): Promise<void> {
   const { database, omschrijving, fbDatabase } = config;
+  if (!fbDatabase) {
+    log(`⊘ Overgeslagen: ${omschrijving} (FB_DATABASE niet geconfigureerd)`);
+    return;
+  }
   const start = Date.now();
   log(`▶ Start werkbon-sync: ${omschrijving} (database=${database})`);
 
@@ -249,6 +253,10 @@ export async function syncAdmin(config: typeof ADMIN_CONFIG[0]): Promise<void> {
   if (config.type === "werkbon") return syncWerkbonnen(config);
 
   const { adminId, database, omschrijving, fbDatabase } = config;
+  if (!fbDatabase) {
+    log(`⊘ Overgeslagen: ${omschrijving} (FB_DATABASE niet geconfigureerd)`);
+    return;
+  }
   const start = Date.now();
   log(`▶ Start sync: ${omschrijving} (adminId=${adminId}, database=${database})`);
 

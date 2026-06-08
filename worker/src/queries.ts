@@ -515,7 +515,7 @@ export function fetchPakbonKosten(adminId: number, fbDatabase?: string): FbPakbo
       ib.WERK_GC_ID,
       SUM(ib.GC_BEDRAG) AS BEDRAG_PAKBON
     FROM AT_INKBREG ib
-    JOIN AT_PAKBON pb ON pb.GC_ID = ib.PAKBON_GC_ID
+    JOIN AT_PAKBON pb ON pb.PAKBON_GC_ID = ib.PAKBON_GC_ID
     JOIN AT_DOCUMENT d ON d.GC_ID = pb.DOCUMENT_GC_ID
     JOIN AT_DAGBOEK dg ON dg.GC_ID = d.DAGBOEK_GC_ID
     WHERE dg.GC_CODE IN ('PB01', 'PB02', 'PB03')
