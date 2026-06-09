@@ -19,12 +19,7 @@ export async function POST(req: NextRequest) {
 
   const { email, password } = parse.data;
 
-  const allowed = await db.allowedEmail.findUnique({ where: { email } });
-  if (!allowed) {
-    await new Promise((r) => setTimeout(r, 300));
-    return NextResponse.json({ error: "Ongeldig e-mailadres of wachtwoord" }, { status: 401 });
-  }
-
+  // Primaire check: user bestaat in de database
   const user = await db.user.findUnique({
     where: { email },
     include: { databases: true },
@@ -33,6 +28,9 @@ export async function POST(req: NextRequest) {
     await new Promise((r) => setTimeout(r, 300));
     return NextResponse.json({ error: "Ongeldig e-mailadres of wachtwoord" }, { status: 401 });
   }
+
+  // Zorg dat AllowedEmail synchroon blijft (voor andere flows die erop leunen)
+  await db.allowedEmail.upsert({ where: { email }, update: {}, create: { email } }).catch(() => null);
 
   const valid = await argon2.verify(user.passwordHash, password);
   if (!valid) {
