@@ -159,13 +159,16 @@ model RmProjectSummary {
   projectleider   String?  @map("projectleider")
   startdatum      DateTime? @db.Date @map("startdatum")
   aanneemsom      Decimal  @default(0) @db.Decimal(15, 2)
-  gefactureerd    Decimal  @default(0) @db.Decimal(15, 2)
-  onbetaald       Decimal  @default(0) @db.Decimal(15, 2)
-  kostenMateriaal Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_materiaal")
+  gefactureerd    Decimal  @default(0) @db.Decimal(15, 2)          // AT_KLNTBREG WHERE GC_GEFACTUREERD IS NOT NULL
+  nogTeFactureren Decimal  @default(0) @db.Decimal(15, 2) @map("onbetaald")  // AT_KLNTBREG WHERE GC_GEFACTUREERD IS NULL
+  kostenMateriaal Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_materiaal")  // journaal-based (legacy)
   kostenArbeid    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_arbeid")
   kostenOverig    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_overig")
   kostenPakbon    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_pakbon")
   urenTotaal      Decimal  @default(0) @db.Decimal(10, 2) @map("uren_totaal")
+  kostenACateg    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_a_categ")   // AV_KOSTREG_2 Arbeid
+  kostenMCateg    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_m_categ")   // AV_KOSTREG_2 Materiaal
+  kostenOCateg    Decimal  @default(0) @db.Decimal(15, 2) @map("kosten_o_categ")   // AV_KOSTREG_2 Overig+E
   synctOp         DateTime @default(now()) @updatedAt @map("synct_op")
 
   @@unique([database, projectNr])
@@ -214,4 +217,24 @@ model RmSyncMeta {
   fout              String?
 
   @@map("rm_sync_meta")
+}
+
+// ─── Kosten per project (AV_KOSTREG_2) ───────────────────────────────────────
+
+model RmKostenRegel {
+  id            String    @id @default(cuid())
+  database      Database
+  projectNr     String    @map("project_nr")
+  typeBreg      String    @map("type_breg")      // B/I/M/U/K/C/T/W
+  categorie     String    @map("categorie")       // A=Arbeid, M=Materiaal, O/E=Overig
+  datum         DateTime? @map("datum") @db.Date
+  omschrijving  String?   @map("omschrijving")
+  bedrag        Decimal?  @map("bedrag")    @db.Decimal(15, 2)
+  dekkingen     Decimal?  @map("dekkingen") @db.Decimal(15, 2)
+  factuurStatus String?   @map("factuur_status")
+  docCode       String?   @map("doc_code")
+  creNaam       String?   @map("cre_naam")
+
+  @@index([database, projectNr])
+  @@map("rm_kosten_regel")
 }

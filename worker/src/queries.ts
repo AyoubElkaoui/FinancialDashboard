@@ -75,6 +75,21 @@ const toInt  = (s: string) => parseInt(s || "0", 10);
 const toNum  = (s: string) => parseFloat(s.replace(",", ".") || "0");
 const toNull = (s: string): string | null => s.trim() === "" ? null : s.trim();
 
+/**
+ * Normaliseert Firebird-datums naar ISO "YYYY-MM-DD".
+ * Firebird isql LIST-mode voegt ": " toe voor DATE/TIMESTAMP kolommen (bv. ": 30.06.2017").
+ * Fallback: null (geen garbage doorgeven aan Postgres).
+ */
+const toDate = (s: string | null | undefined): string | null => {
+  if (!s) return null;
+  const v = s.trim().replace(/^:\s*/, "");      // strip Firebird isql colon prefix
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);          // YYYY-MM-DD (ISO)
+  const m = v.match(/^(\d{2})\.(\d{2})\.(\d{4})/);                   // DD.MM.YYYY (+ opt. tijd)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return null;
+};
+
 // ─── Query functies ─────────────────────────────────────────────────────────────
 
 /** Alle rubriek-codes inclusief type (W/B). */
@@ -217,7 +232,7 @@ export function fetchJournaalDetail(adminId: number, fbDatabase?: string): FbJou
     .filter(r => r.WERK_GC_ID && r.RUBRIEK_CODE && r.DEBET_CREDIT)
     .map(r => ({
       WERK_GC_ID:    toInt(r.WERK_GC_ID),
-      DATUM:         (r.DATUM ?? "").trim(),
+      DATUM:         toDate(r.DATUM) ?? "",
       RUBRIEK_CODE:  (r.RUBRIEK_CODE ?? "").trim(),
       RUBRIEK_OMSCHR: (r.RUBRIEK_OMSCHR ?? "").trim(),
       TYPE_RUBRIEK:  (r.TYPE_RUBRIEK ?? "").trim(),
@@ -250,18 +265,19 @@ export function fetchUrenAgg(adminId: number, fbDatabase?: string): FbUrenAgg[] 
 export interface FbProjectleider {
   WERK_GC_ID:   number;
   PROJECTLEIDER: string;
+  MEDEW_COUNT:  number;
 }
 
 /**
- * Projectleider per werk via AT_ORDER.MEDEW_GC_ID → AT_MEDEW.
- * Sommige projecten hebben meerdere orders; we nemen de alphabetisch eerste naam.
- * Veld MEDEW_GC_ID op AT_ORDER: kandidaat per spec — verifieer bij afwijking.
+ * Projectleider(s) per werk via AT_ORDER.MEDEW_GC_ID → AT_MEDEW.
+ * Geeft de alfabetisch eerste naam + het aantal unieke medewerkers (voor "Naam +n" weergave).
  */
 export function fetchProjectleiders(adminId: number, fbDatabase?: string): FbProjectleider[] {
   const rows = fbQuery(`
     SELECT
       o.WERK_GC_ID,
-      MIN(COALESCE(m.GC_OMSCHRIJVING, '')) AS PROJECTLEIDER
+      MIN(COALESCE(m.GC_OMSCHRIJVING, '')) AS PROJECTLEIDER,
+      COUNT(DISTINCT o.MEDEW_GC_ID)        AS MEDEW_COUNT
     FROM AT_ORDER o
     JOIN AT_MEDEW m ON m.GC_ID = o.MEDEW_GC_ID
     WHERE o.WERK_GC_ID IN (
@@ -276,7 +292,100 @@ export function fetchProjectleiders(adminId: number, fbDatabase?: string): FbPro
     .map(r => ({
       WERK_GC_ID:   toInt(r.WERK_GC_ID),
       PROJECTLEIDER: (r.PROJECTLEIDER ?? "").trim(),
+      MEDEW_COUNT:  toInt(r.MEDEW_COUNT ?? "1"),
     }));
+}
+
+// ─── Kosten-detail (AV_KOSTREG_2) ─────────────────────────────────────────────
+
+export interface FbKostenRegel {
+  WERK_GC_ID:    number;
+  TYPE_BREG:     string;      // B/I/M/U/K/C/T/W
+  CATEGORIE:     string;      // A=Arbeid, M=Materiaal, O/E=Overig
+  DATUM:         string | null;
+  OMSCHRIJVING:  string | null;
+  GC_BEDRAG:     number | null;
+  DEKKINGEN:     number | null;
+  FACTUUR_STATUS: string | null;
+  DOC_CODE:      string | null;
+  CRE_NAAM:      string | null;
+}
+
+/**
+ * Alle kostenregels per project via AV_KOSTREG_2.
+ * Dit is de Syntess-view die alle *BREG-tabellen combineert per kostensoort.
+ * KS_CATEGORIE: A=Arbeid, M=Materiaal, O/E=Overig.
+ */
+export function fetchKostenDetail(adminId: number, fbDatabase?: string): FbKostenRegel[] {
+  const rows = fbQuery(`
+    SELECT
+      k.WERK_GC_ID,
+      TRIM(k.TYPE_BREG)       AS TYPE_BREG,
+      TRIM(k.KS_CATEGORIE)    AS CATEGORIE,
+      CAST(CAST(k.DOC_GC_BOEKDATUM AS DATE) AS VARCHAR(10)) AS DATUM,
+      SUBSTRING(COALESCE(k.GC_OMSCHRIJVING, '') FROM 1 FOR 120) AS OMSCHRIJVING,
+      k.GC_BEDRAG,
+      k.DEKKINGEN,
+      TRIM(k.FACTUREERSTATUS) AS FACTUUR_STATUS,
+      TRIM(k.DOC_GC_CODE)     AS DOC_CODE,
+      SUBSTRING(COALESCE(r.GC_OMSCHRIJVING, '') FROM 1 FOR 100) AS CRE_NAAM
+    FROM AV_KOSTREG_2 k
+    LEFT JOIN AT_RELATIE r ON r.GC_ID = k.CRE_RELATIE_GC_ID
+    WHERE k.WERK_GC_ID IN (
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
+    )
+      AND k.WERK_GC_ID IS NOT NULL
+    ORDER BY k.DOC_GC_BOEKDATUM DESC;
+  `, fbDatabase);
+
+  return rows
+    .filter(r => r.WERK_GC_ID)
+    .map(r => ({
+      WERK_GC_ID:    toInt(r.WERK_GC_ID),
+      TYPE_BREG:     (r.TYPE_BREG ?? "").trim(),
+      CATEGORIE:     (r.CATEGORIE ?? "O").trim(),
+      DATUM:         toDate(r.DATUM),
+      OMSCHRIJVING:  r.OMSCHRIJVING?.trim() || null,
+      GC_BEDRAG:     r.GC_BEDRAG != null && r.GC_BEDRAG !== "" ? toNum(r.GC_BEDRAG) : null,
+      DEKKINGEN:     r.DEKKINGEN != null && r.DEKKINGEN !== "" ? toNum(r.DEKKINGEN) : null,
+      FACTUUR_STATUS: r.FACTUUR_STATUS?.trim() || null,
+      DOC_CODE:      r.DOC_CODE?.trim() || null,
+      CRE_NAAM:      r.CRE_NAAM?.trim() || null,
+    }));
+}
+
+// ─── Omzet (AT_KLNTBREG) ─────────────────────────────────────────────────────
+
+export interface FbOmzetAgg {
+  WERK_GC_ID:   number;
+  GEFACTUREERD: number;   // SUM(GC_BEDRAG) WHERE GC_GEFACTUREERD IS NOT NULL
+  NOG_TE_FACT:  number;   // SUM(GC_BEDRAG) WHERE GC_GEFACTUREERD IS NULL
+}
+
+/**
+ * Gefactureerde en nog-te-factureren bedragen per project via AT_KLNTBREG.
+ * GC_GEFACTUREERD IS NOT NULL → al gefactureerde termijnen/regels.
+ * GC_GEFACTUREERD IS NULL     → goedgekeurde maar nog niet gefactureerde regels.
+ */
+export function fetchOmzetAgg(adminId: number, fbDatabase?: string): FbOmzetAgg[] {
+  const rows = fbQuery(`
+    SELECT
+      k.WERK_GC_ID,
+      SUM(CASE WHEN k.GC_GEFACTUREERD IS NOT NULL THEN k.GC_BEDRAG ELSE 0 END) AS GEFACTUREERD,
+      SUM(CASE WHEN k.GC_GEFACTUREERD IS NULL     THEN k.GC_BEDRAG ELSE 0 END) AS NOG_TE_FACT
+    FROM AT_KLNTBREG k
+    WHERE k.WERK_GC_ID IN (
+      SELECT GC_ID FROM AT_WERK WHERE ADMINIS_GC_ID = ${adminId}
+    )
+      AND k.WERK_GC_ID IS NOT NULL
+    GROUP BY k.WERK_GC_ID
+    ORDER BY k.WERK_GC_ID;
+  `, fbDatabase);
+  return rows.map(r => ({
+    WERK_GC_ID:   toInt(r.WERK_GC_ID),
+    GEFACTUREERD: toNum(r.GEFACTUREERD ?? "0"),
+    NOG_TE_FACT:  toNum(r.NOG_TE_FACT  ?? "0"),
+  }));
 }
 
 // ─── Werkbon queries (Maintenance) ────────────────────────────────────────────
@@ -378,7 +487,7 @@ export function fetchWerkbonnen(fbDatabase: string): FbWerkbon[] {
     const bon = r.BONNUMMER?.trim() ?? "";
     return {
       BONNUMMER:          bon,
-      DATUM:              r.DATUM?.trim() ?? "",
+      DATUM:              toDate(r.DATUM) ?? "",
       OMSCHRIJVING:       r.OMSCHRIJVING?.trim() || null,
       STATUS:             r.STATUS?.trim() ?? "",
       METH_IN_UITVOERING: r.METH_IN_UITVOERING?.trim() || null,
@@ -433,7 +542,7 @@ export function fetchJournaalMaintenance(fbDatabase: string): FbMaintOmzetRegel[
     .filter(r => r.CONTRACT_CODE && r.DATUM && r.RUBRIEK_CODE)
     .map(r => ({
       CONTRACT_CODE:  r.CONTRACT_CODE.trim(),
-      DATUM:          r.DATUM.trim(),
+      DATUM:          toDate(r.DATUM) ?? "",
       RUBRIEK_CODE:   r.RUBRIEK_CODE.trim(),
       RUBRIEK_OMSCHR: r.RUBRIEK_OMSCHR?.trim() ?? "",
       BEDRAG:         parseFloat(r.BEDRAG ?? "0") || 0,
@@ -485,7 +594,7 @@ export function fetchUrenDetail(adminId: number, fbDatabase?: string): FbUrenDet
     .map(r => ({
       WERK_GC_ID:  toInt(r.WERK_GC_ID),
       MEDEWERKER:  (r.MEDEWERKER ?? "Onbekend").trim(),
-      DATUM:       (r.DATUM ?? "").trim(),
+      DATUM:       toDate(r.DATUM) ?? "",
       AANTAL:      toNum(r.AANTAL ?? "0"),
       OMSCHRIJVING: toNull(r.OMSCHRIJVING ?? ""),
     }));

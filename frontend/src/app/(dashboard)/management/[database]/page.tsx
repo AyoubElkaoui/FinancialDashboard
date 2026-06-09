@@ -24,7 +24,8 @@ interface ProjectRow {
   MEERWERK: number;
   TOTAAL_AANNEEMSOM: number;
   GEFACTUREERD_TOTAAL: number;
-  PCT_BETAALD: number | null;
+  NOG_TE_FACTUREREN: number;
+  PCT_GEFACT: number | null;
   TOTALE_KOSTEN: number;
   BRUTOMARGE: number;
   MARGE_PCT: number;
@@ -33,6 +34,7 @@ interface ProjectRow {
 interface Totals {
   aanneemsom: number;
   gefactureerd: number;
+  nogTeFactureren: number;
   kosten: number;
   marge: number;
 }
@@ -133,12 +135,13 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
   const totals = data?._totals;
 
   // Afgeleide totalen (globaal via _totals uit API)
-  const totAanneemsom = totals?.aanneemsom  ?? 0;
-  const totGefact     = totals?.gefactureerd ?? 0;
-  const totKosten     = totals?.kosten       ?? 0;
-  const totMarge      = totals?.marge        ?? 0;
-  const totNietGefact = totAanneemsom - totGefact;
-  const gemMargePct   = totKosten > 0 ? totMarge / totKosten * 100 : 0;
+  const totAanneemsom  = totals?.aanneemsom      ?? 0;
+  const totGefact      = totals?.gefactureerd    ?? 0;
+  const totNogTeFact   = totals?.nogTeFactureren ?? 0;
+  const totKosten      = totals?.kosten          ?? 0;
+  const totMarge       = totals?.marge           ?? 0;
+  // Marge % = brutomarge ÷ gefactureerde omzet
+  const gemMargePct    = totGefact > 0 ? totMarge / totGefact * 100 : 0;
 
   return (
     <div className="space-y-6 pb-10">
@@ -189,13 +192,13 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
       {!isLoading && totals && (data?.total ?? 0) > 0 && (
         <div className="flex flex-wrap gap-x-8 gap-y-2 px-1">
           {[
-            { label: "Aanneemsom",   value: formatCurrency(totAanneemsom) },
-            { label: "Gefactureerd", value: formatCurrency(totGefact) },
-            { label: "Niet-gefact.", value: formatCurrency(totNietGefact), warn: totNietGefact > 0 },
-            { label: "Totale kosten", value: formatCurrency(totKosten) },
-            { label: "Brutomarge",   value: formatCurrency(totMarge), success: totMarge >= 0 },
-            { label: "Gem. marge",   value: formatPercentage(gemMargePct) },
-            { label: "Totaal",       value: `${data?.total ?? 0} ${database === "MAINTENANCE" ? "werkbonnen" : "projecten"}` },
+            { label: "Aanneemsom",      value: formatCurrency(totAanneemsom) },
+            { label: "Gefactureerd",    value: formatCurrency(totGefact) },
+            { label: "Nog te fact.",    value: formatCurrency(totNogTeFact), warn: totNogTeFact > 0 },
+            { label: "Totale kosten",   value: formatCurrency(totKosten) },
+            { label: "Brutomarge",      value: formatCurrency(totMarge), success: totMarge >= 0 },
+            { label: "Gem. marge %",    value: formatPercentage(gemMargePct) },
+            { label: "Totaal projecten", value: `${data?.total ?? 0}` },
           ].map(({ label, value, warn, success }) => (
             <div key={label} className="text-sm">
               <span className="text-muted-foreground text-xs block">{label}</span>
@@ -230,7 +233,7 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
           <CardContent className="p-0">
             {projecten.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                Geen {database === "MAINTENANCE" ? "werkbonnen" : "projecten"} gevonden
+                Geen projecten gevonden
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -238,9 +241,9 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
                   <thead>
                     <tr className="border-b bg-muted/40">
                       {[
-                        database === "MAINTENANCE" ? "Bonnr." : "Projectnr.",
+                        "Projectnr.",
                         "Naam", "Klant", "Projectleider", "Status",
-                        "Aanneemsom", "Gefactureerd", "Niet-gefact. %",
+                        "Aanneemsom", "Gefactureerd", "Nog te fact. %",
                         "Totale kosten", "Brutomarge", "Marge %", "",
                       ].map((h, i) => (
                         <th
@@ -254,8 +257,10 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
                   </thead>
                   <tbody>
                     {projecten.map(p => {
-                      const nietGefactPct = p.TOTAAL_AANNEEMSOM > 0
-                        ? (p.TOTAAL_AANNEEMSOM - p.GEFACTUREERD_TOTAAL) / p.TOTAAL_AANNEEMSOM * 100
+                      // Nog te factureren als % van aanneemsom (hoeveel nog te gaan)
+                      const nogTeFact = p.NOG_TE_FACTUREREN ?? 0;
+                      const nogTeFactPct = p.TOTAAL_AANNEEMSOM > 0
+                        ? nogTeFact / p.TOTAAL_AANNEEMSOM * 100
                         : 0;
                       return (
                         <tr
@@ -270,8 +275,8 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
                           <td className="px-3 py-2.5 whitespace-nowrap"><StatusBadge status={p.STATUS} /></td>
                           <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCurrency(p.TOTAAL_AANNEEMSOM)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCurrency(p.GEFACTUREERD_TOTAAL)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${nietGefactPct > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
-                            {formatPercentage(nietGefactPct)}
+                          <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${nogTeFactPct > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
+                            {formatPercentage(nogTeFactPct)}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap text-muted-foreground">{formatCurrency(p.TOTALE_KOSTEN)}</td>
                           <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap font-semibold ${p.BRUTOMARGE >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>

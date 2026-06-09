@@ -39,20 +39,19 @@ export async function GET(
   const urenTarief   = Number(input?.urenTarief   ?? DEFAULT_UREN_TARIEF);
   const algKostenPct = Number(input?.algKostenPct ?? 0);
 
-  const aanneemsom    = Number(rm.aanneemsom)    || 0;
-  const gefactureerd  = Number(rm.gefactureerd)  || 0;
-  const onbetaald     = Number(rm.onbetaald)     || 0;
-  const urenTotaal    = Number(rm.urenTotaal)    || 0;
-  const kostenSyntess = (Number(rm.kostenMateriaal) || 0)
-                      + (Number(rm.kostenArbeid)    || 0)
-                      + (Number(rm.kostenOverig)    || 0);
-  const kostenIndirect = urenTotaal * urenTarief;
-  const kostenAlgemeen = kostenSyntess * (algKostenPct / 100);
-  const totaleKosten   = kostenSyntess + kostenIndirect + kostenAlgemeen;
-  const brutomarge     = gefactureerd - totaleKosten;
-  const margePct       = gefactureerd > 0 ? (brutomarge / gefactureerd) * 100 : 0;
-  const pctBetaald     = aanneemsom   > 0 ? (gefactureerd / aanneemsom)  * 100 : 0;
-  const betaald        = Math.max(0, gefactureerd - onbetaald);
+  const aanneemsom      = Number(rm.aanneemsom)    || 0;
+  const gefactureerd    = Number(rm.gefactureerd)  || 0;
+  const nogTeFactureren = Number(rm.nogTeFactureren) || 0;
+  const urenTotaal      = Number(rm.urenTotaal)    || 0;
+  const kostenSyntess   = (Number(rm.kostenMateriaal) || 0)
+                        + (Number(rm.kostenArbeid)    || 0)
+                        + (Number(rm.kostenOverig)    || 0);
+  const kostenIndirect  = urenTotaal * urenTarief;
+  const kostenAlgemeen  = kostenSyntess * (algKostenPct / 100);
+  const totaleKosten    = kostenSyntess + kostenIndirect + kostenAlgemeen;
+  const brutomarge      = gefactureerd - totaleKosten;
+  const margePct        = gefactureerd > 0 ? (brutomarge / gefactureerd) * 100 : 0;
+  const pctGefact       = aanneemsom   > 0 ? (gefactureerd / aanneemsom)  * 100 : 0;
 
   // Journaalregels als factuurproxy (credit 8xxx, laatste 365 dagen)
   let journaalOmzet: { rubriekCode: string; datum: unknown; bedrag: unknown; omschrijving: string | null }[] = [];
@@ -99,9 +98,12 @@ export async function GET(
     ALG_KOSTEN:        kostenAlgemeen,
     TOTALE_KOSTEN:     totaleKosten,
     GEFACTUREERD_TOTAAL: gefactureerd,
-    BETAALD_TOTAAL:    betaald,
-    ONBETAALD_TOTAAL:  Math.max(0, onbetaald),
-    PCT_BETAALD:       pctBetaald,
+    NOG_TE_FACTUREREN:   nogTeFactureren,
+    PCT_GEFACT:          pctGefact,
+    // Backwards compat (AT_AANMVFAC leeg — geen betalingsdata)
+    BETAALD_TOTAAL:   gefactureerd,
+    ONBETAALD_TOTAAL: nogTeFactureren,
+    PCT_BETAALD:      pctGefact,
     BRUTOMARGE:        brutomarge,
     MARGE_PCT:         margePct,
     hasOverrides:  !!input,

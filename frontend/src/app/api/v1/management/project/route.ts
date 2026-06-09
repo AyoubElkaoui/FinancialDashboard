@@ -11,10 +11,6 @@ const DEFAULT_UREN_TARIEF: Record<string, number> = {
 };
 const DEFAULT_ALG_KOSTEN_PCT = 5;
 
-const WB_STATUS_LABELS: Record<string, string> = {
-  A: "Aangemaakt", I: "In uitvoering", U: "Uitgevoerd", V: "Voltooid",
-};
-
 function toISO(d: unknown): string {
   if (d instanceof Date) return d.toISOString().slice(0, 10);
   return String(d).slice(0, 10);
@@ -30,65 +26,7 @@ export async function GET(request: NextRequest) {
 
   if (!projectNr) return Response.json({ error: "projectNr vereist" }, { status: 400 });
 
-  // ─── MAINTENANCE: werkbon-type ─────────────────────────────────────────────
-  if (database === "MAINTENANCE") {
-    const wb = await db.rmWerkbon.findFirst({ where: { database, bonnummer: projectNr } });
-    if (!wb) return Response.json({ error: "Werkbon niet gevonden" }, { status: 404 });
-
-    const tarief   = DEFAULT_UREN_TARIEF["MAINTENANCE"];
-    const algPct   = DEFAULT_ALG_KOSTEN_PCT / 100;
-    const aanneemsom   = Number(wb.opbrengsten ?? 0);
-    const gef          = wb.isGefactureerd ? aanneemsom : 0;
-    const urenWerkbon  = Number(wb.urenWerkbon  ?? 0);
-    const urenContract = Number(wb.urenContract ?? 0);
-    const urenTotaal   = urenWerkbon + urenContract;
-    const kostenIndirect = urenTotaal * tarief;
-    const kostenAlgemeen = aanneemsom * algPct;
-    const totaleKosten   = kostenIndirect + kostenAlgemeen;
-    const brutomarge     = gef - totaleKosten;
-    const margePct       = totaleKosten > 0 ? brutomarge / totaleKosten * 100 : 0;
-
-    return Response.json({
-      type: "werkbon",
-      project: {
-        projectNr:     wb.bonnummer,
-        naam:          wb.omschrijving ?? "(geen omschrijving)",
-        klant:         wb.klant ?? "",
-        projectleider: wb.eigenaar ?? "",
-        status:        wb.status,
-        statusLabel:   WB_STATUS_LABELS[wb.status] ?? wb.status,
-        datum:         wb.datum ? toISO(wb.datum) : null,
-        isGefactureerd: wb.isGefactureerd,
-        werkCode:      wb.werkCode ?? null,
-        taakCode:      wb.taakCode ?? null,
-        fase:          wb.fase ?? null,
-      },
-      berekening: {
-        aanneemsom,
-        gefactureerd:  gef,
-        urenWerkbon,
-        urenContract,
-        urenTotaal,
-        urenTarief:    tarief,
-        algKostenPct:  DEFAULT_ALG_KOSTEN_PCT,
-        kostenDirect:  0,
-        kostenPakbon:  0,
-        kostenIndirect,
-        kostenAlgemeen,
-        totaleKosten,
-        brutomarge,
-        margePct,
-        pctBetaald: aanneemsom > 0 ? gef / aanneemsom * 100 : null,
-      },
-      journaalKosten:     [],
-      journaalOpbrengsten: [],
-      urenDetail:          [],
-      urenPerMedewerker:   [],
-      _journaalPeriode:    null,
-    });
-  }
-
-  // ─── Project-type: Services / International / Keyser ──────────────────────
+  // ─── Alle databases: lees uit rm_project_summary ──────────────────────────
   const rm = await db.rmProjectSummary.findFirst({ where: { database, projectNr } });
   if (!rm) return Response.json({ error: "Project niet gevonden" }, { status: 404 });
 
@@ -101,22 +39,29 @@ export async function GET(request: NextRequest) {
 
   const aanneemsom    = Number(rm.aanneemsom)    || 0;
   const gefactureerd  = Number(rm.gefactureerd)  || 0;
-  const onbetaald     = Number(rm.onbetaald)     || 0;
+  const nogTeFactureren = Number(rm.nogTeFactureren) || 0;
   const urenTotaal    = Number(rm.urenTotaal)    || 0;
-  const kostenMat     = Number(rm.kostenMateriaal) || 0;
-  const kostenArb     = Number(rm.kostenArbeid)    || 0;
-  const kostenOvg     = Number(rm.kostenOverig)    || 0;
-  const kostenPakbon  = Number(rm.kostenPakbon)    || 0;
-  const kostenDirect  = kostenMat + kostenArb + kostenOvg;
+
+  // Kosten: gebruik AV_KOSTREG_2 categorietotalen als beschikbaar
+  const kostenACateg = Number(rm.kostenACateg) || 0;
+  const kostenMCateg = Number(rm.kostenMCateg) || 0;
+  const kostenOCateg = Number(rm.kostenOCateg) || 0;
+  const heeftCateg   = (kostenACateg + kostenMCateg + kostenOCateg) > 0;
+
+  const kostenDirect   = heeftCateg
+    ? kostenACateg + kostenMCateg + kostenOCateg
+    : (Number(rm.kostenMateriaal) || 0) + (Number(rm.kostenArbeid) || 0) + (Number(rm.kostenOverig) || 0);
+  const kostenPakbon   = Number(rm.kostenPakbon) || 0;
   const kostenIndirect = urenTotaal * urenTarief;
   const kostenAlgemeen = aanneemsom * (algKostenPct / 100);
   const totaleKosten   = kostenDirect + kostenPakbon + kostenIndirect + kostenAlgemeen;
   const brutomarge     = gefactureerd - totaleKosten;
-  const margePct       = totaleKosten > 0 ? brutomarge / totaleKosten * 100 : 0;
-  const pctBetaald     = aanneemsom > 0 ? gefactureerd / aanneemsom * 100 : null;
+  // Marge % = brutomarge ÷ omzet (AT_KLNTBREG gefactureerd)
+  const margePct       = gefactureerd > 0 ? brutomarge / gefactureerd * 100 : 0;
+  const pctGefact      = aanneemsom > 0 ? gefactureerd / aanneemsom * 100 : null;
 
-  // Journaal + uren detail (laatste 365 dagen)
-  const [journaalRaw, urenRaw] = await Promise.all([
+  // Journaal, uren en kosten-regels parallel ophalen
+  const [journaalRaw, urenRaw, kostenRegels] = await Promise.all([
     db.rmJournaal.findMany({
       where: { database, projectNr },
       orderBy: { datum: "desc" },
@@ -125,20 +70,13 @@ export async function GET(request: NextRequest) {
       where: { database, projectNr },
       orderBy: [{ medewerker: "asc" }, { datum: "desc" }],
     }),
+    db.rmKostenRegel.findMany({
+      where: { database, projectNr },
+      orderBy: { datum: "desc" },
+    }),
   ]);
 
-  // Kosten = typeRubriek W, debetCredit D
-  const journaalKosten = journaalRaw
-    .filter(j => j.typeRubriek === "W" && j.debetCredit === "D")
-    .map(j => ({
-      datum:        toISO(j.datum),
-      rubriekCode:  j.rubriekCode,
-      rubriekOmschr: j.rubriekOmschr,
-      bedrag:       Number(j.bedrag),
-      omschrijving: j.omschrijving ?? null,
-    }));
-
-  // Opbrengsten = typeRubriek B + W credits (facturen/memoriaal)
+  // Opbrengsten = typeRubriek B + W credits
   const journaalOpbrengsten = journaalRaw
     .filter(j => j.typeRubriek === "B" || (j.typeRubriek === "W" && j.debetCredit === "C"))
     .map(j => ({
@@ -165,6 +103,36 @@ export async function GET(request: NextRequest) {
   }
   const urenPerMedewerker = Object.values(medMap).sort((a, b) => b.totaal - a.totaal);
 
+  // Kosten-regels (AV_KOSTREG_2) — per categorie voor A/M/O toggles
+  const kostenRegelsMapped = kostenRegels.map(k => ({
+    typeBreg:      k.typeBreg,
+    categorie:     k.categorie,
+    datum:         k.datum ? toISO(k.datum) : null,
+    omschrijving:  k.omschrijving ?? null,
+    bedrag:        Number(k.bedrag ?? 0),
+    dekkingen:     Number(k.dekkingen ?? 0),
+    factuurStatus: k.factuurStatus ?? null,
+    docCode:       k.docCode ?? null,
+    creNaam:       k.creNaam ?? null,
+  }));
+
+  // Per-categorie totalen vanuit rm_project_summary (sneller dan regels tellen)
+  // Als kostenRegels beschikbaar zijn, herbereken voor zekerheid
+  let kostenArbeidCateg   = kostenACateg;
+  let kostenMateriaalCateg = kostenMCateg;
+  let kostenOverigCateg   = kostenOCateg;
+  if (kostenRegels.length > 0) {
+    kostenArbeidCateg   = 0;
+    kostenMateriaalCateg = 0;
+    kostenOverigCateg   = 0;
+    for (const k of kostenRegelsMapped) {
+      const bedrag = k.bedrag;
+      if (k.categorie === "A") kostenArbeidCateg   += bedrag;
+      else if (k.categorie === "M") kostenMateriaalCateg += bedrag;
+      else kostenOverigCateg += bedrag;  // O en E
+    }
+  }
+
   return Response.json({
     type: "project",
     project: {
@@ -179,14 +147,14 @@ export async function GET(request: NextRequest) {
     berekening: {
       aanneemsom,
       gefactureerd,
-      onbetaald,
-      betaald:       Math.max(0, gefactureerd - onbetaald),
+      nogTeFactureren,
+      pctGefact,
       urenTotaal,
       urenTarief,
       algKostenPct,
-      kostenMateriaal: kostenMat,
-      kostenArbeid:    kostenArb,
-      kostenOverig:    kostenOvg,
+      kostenMateriaal:  Number(rm.kostenMateriaal) || 0,
+      kostenArbeid:     Number(rm.kostenArbeid)    || 0,
+      kostenOverig:     Number(rm.kostenOverig)    || 0,
       kostenDirect,
       kostenPakbon,
       kostenIndirect,
@@ -194,12 +162,15 @@ export async function GET(request: NextRequest) {
       totaleKosten,
       brutomarge,
       margePct,
-      pctBetaald,
+      // AV_KOSTREG_2 per-categorie (voor A/M/O toggles)
+      kostenArbeidCateg,
+      kostenMateriaalCateg,
+      kostenOverigCateg,
     },
-    journaalKosten,
+    kostenRegels:       kostenRegelsMapped,
     journaalOpbrengsten,
     urenDetail,
     urenPerMedewerker,
-    _journaalPeriode: journaalRaw.length > 0 ? "gesynchroniseerde periode" : null,
+    _kostenPeriode: kostenRegels.length > 0 ? "gesynchroniseerde periode" : null,
   });
 }

@@ -29,41 +29,42 @@ export const FB_LD_LIBRARY = process.env.FB_LD_LIBRARY ?? "/opt/firebird/lib:/us
 
 export const DATABASE_URL = requireEnv("DATABASE_URL");
 
-// Per-administratie configuratie: adminId, dashboard-enum, FDB-pad, rapportage-type
+// Per-administratie configuratie: adminIds (meerdere voor één database), dashboard-enum, FDB-pad, type
 export const ADMIN_CONFIG: Array<{
-  adminId:      number;
+  adminIds:     number[];     // een of meer ADMINIS_GC_ID's voor dezelfde database
   database:     string;       // Prisma Database enum waarde
   omschrijving: string;
   fbDatabase:   string;       // volledig Windows-pad naar de .FDB op de server
   type:         "project" | "werkbon";
 }> = [
   {
-    adminId:      1,
+    // Services DB bevat TWO administrations: 1 (Elmar Services) + 100001 (Elmar International BV)
+    adminIds:     [1, 100001],
     database:     "SERVICES",
     omschrijving: "Elmar Services",
     fbDatabase:   process.env.FB_DATABASE      ?? "",
     type:         "project",
   },
   {
-    adminId:      1,
+    adminIds:     [1],
     database:     "MAINTENANCE",
     omschrijving: "Elmar Maintenance",
     fbDatabase:   process.env.FB_DATABASE_MAINT ?? "",
-    type:         "werkbon",
+    type:         "project",
   },
   {
     // ELMI.FDB is een aparte Firebird database; adminId is de ADMINIS_GC_ID daarin (standaard 1)
-    adminId:      Number(process.env.INTERNATIONAL_ADMIN_ID ?? 1),
+    adminIds:     [Number(process.env.INTERNATIONAL_ADMIN_ID ?? 1)],
     database:     "INTERNATIONAL",
     omschrijving: "Elmar International",
     fbDatabase:   process.env.FB_DATABASE_INT  ?? "",
     type:         "project",
   },
   {
-    adminId:      Number(process.env.KEYSER_ADMIN_ID ?? 0),
+    adminIds:     [Number(process.env.KEYSER_ADMIN_ID ?? 0)],
     database:     "KEYSER",
     omschrijving: "Keyser",
-    fbDatabase:   process.env.FB_DATABASE_KEY  ?? "",   // A10: pad naar Keyser .FDB
+    fbDatabase:   process.env.FB_DATABASE_KEY  ?? "",
     type:         "project",
   },
 ];
