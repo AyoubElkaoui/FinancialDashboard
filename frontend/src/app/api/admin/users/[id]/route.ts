@@ -7,7 +7,7 @@ import { audit } from "@/lib/audit";
 import type { Database } from "@prisma/client";
 
 const patchSchema = z.object({
-  role:        z.enum(["ADMIN", "VIEWER"]).optional(),
+  role:        z.enum(["ADMIN", "MGM", "VIEWER"]).optional(),
   databases:   z.array(z.enum(["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"])).optional(),
   newPassword: z.string().min(8).max(128).optional(),
 });
