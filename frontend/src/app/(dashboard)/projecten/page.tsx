@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useRole } from "@/hooks/use-role";
 import { formatCurrency, formatPercentage } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { LayoutGrid, Table2, Sheet, TrendingUp, Euro, FolderKanban, AlertCircle } from "lucide-react";
@@ -322,6 +323,7 @@ type StatusFilter = "alle" | "actueel" | "historisch";
 
 function ProjectenInner() {
   const router  = useRouter();
+  const role    = useRole();
   const [activeDb,  setActiveDb]  = useState("SERVICES");
   const [search,    setSearch]    = useState("");
   const [mounted,   setMounted]   = useState(false);
@@ -378,7 +380,10 @@ function ProjectenInner() {
     try { localStorage.setItem("elmar_projecten_pagesize", String(ps)); } catch {}
   };
 
-  const navigate = (p: ElmarProjectSummary) => router.push(`/projecten/${p.ID}?database=${p.DATABASE}`);
+  const navigate = (p: ElmarProjectSummary) =>
+    role === "MGM"
+      ? router.push(`/management/${p.DATABASE}/${encodeURIComponent(p.PROJECTNUMMER)}`)
+      : router.push(`/projecten/${p.ID}?database=${p.DATABASE}`);
 
   return (
     <div className="space-y-5">

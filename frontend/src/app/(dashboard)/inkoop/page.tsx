@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { inkoopApi } from "@/lib/api-client";
 import { formatDate, formatCurrency } from "@/lib/format";
@@ -29,6 +30,18 @@ const columns: ColumnDef<Inkoop>[] = [
   { accessorKey: "STATUS", header: "Status", cell: ({ getValue }) => <Badge variant="secondary" className="text-xs">{String(getValue() ?? "")}</Badge> },
 ];
 
+const mgmColumns: ColumnDef<Inkoop>[] = [
+  { accessorKey: "PROJECT",       header: "Project",      size: 130, cell: ({ getValue }) => {
+    const v = String(getValue() ?? "");
+    return v ? <span className="font-mono text-xs text-muted-foreground">{v}</span> : <span className="text-muted-foreground">—</span>;
+  }},
+  { accessorKey: "LEVERANCIER",   header: "Leverancier" },
+  { accessorKey: "DATUM",         header: "Datum",    cell: ({ getValue }) => formatDate(String(getValue() ?? "")) },
+  { accessorKey: "BEDRAG_EXCL",   header: "Excl. BTW", cell: ({ getValue }) => <span className="tabular-nums">{formatCurrency(Number(getValue() ?? 0))}</span> },
+  { accessorKey: "TOTAALBEDRAG",  header: "Totaal",   cell: ({ getValue }) => <span className="tabular-nums font-medium">{formatCurrency(Number(getValue() ?? 0))}</span> },
+  { accessorKey: "STATUS",        header: "Status",   cell: ({ getValue }) => <Badge variant="secondary" className="text-xs">{String(getValue() ?? "")}</Badge> },
+];
+
 // ── Gedeelde hulpfuncties ──────────────────────────────────────────────────────
 
 const MGM_DBS = [
@@ -46,6 +59,7 @@ function topNOverig(data: { name: string; value: number }[], n = 8) {
 // ── Management inkoop (MGM rol) ───────────────────────────────────────────────
 
 function ManagementInkoopPage() {
+  const router = useRouter();
   const [db, setDb]         = useState<string>("SERVICES");
   const [page, setPage]     = useState(1);
   const [search, setSearch] = useState("");
@@ -130,7 +144,7 @@ function ManagementInkoopPage() {
           </div>
 
           <DataTable
-            columns={columns}
+            columns={mgmColumns}
             data={((list as { data?: Inkoop[] } | undefined)?.data ?? []) as Inkoop[]}
             loading={isLoading}
             total={(list as { total?: number } | undefined)?.total}
@@ -139,6 +153,10 @@ function ManagementInkoopPage() {
             totalPages={(list as { totalPages?: number } | undefined)?.totalPages}
             onPageChange={setPage}
             emptyMessage="Geen inkoopfacturen gevonden"
+            onRowClick={(row) => {
+              const proj = String((row as Inkoop).PROJECT ?? "");
+              if (proj) router.push(`/management/${db}/${encodeURIComponent(proj)}`);
+            }}
           />
         </div>
 

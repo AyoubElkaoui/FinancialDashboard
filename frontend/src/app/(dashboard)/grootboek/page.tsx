@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { grootboekApi } from "@/lib/api-client";
 import { formatDate, formatCurrency } from "@/lib/format";
@@ -19,6 +20,10 @@ type Mutatie = Record<string, unknown>;
 type Resultaat = Record<string, unknown>;
 
 const mutatieColumns: ColumnDef<Mutatie>[] = [
+  { accessorKey: "PROJECT",        header: "Project",  size: 120, cell: ({ getValue }) => {
+    const v = String(getValue() ?? "");
+    return v ? <span className="font-mono text-xs text-muted-foreground">{v}</span> : <span className="text-muted-foreground">—</span>;
+  }},
   { accessorKey: "DATUM", header: "Datum", cell: ({ getValue }) => formatDate(String(getValue() ?? "")) },
   { accessorKey: "REKENINGNUMMER", header: "Rekening", size: 80 },
   { accessorKey: "RUBRIEK", header: "Rubriek" },
@@ -66,6 +71,7 @@ const MGM_DBS = [
 // ── Management grootboek (MGM rol) ────────────────────────────────────────────
 
 function ManagementGrootboekPage() {
+  const router = useRouter();
   const [db, setDb]         = useState<string>("SERVICES");
   const [page, setPage]     = useState(1);
   const [search, setSearch] = useState("");
@@ -169,6 +175,10 @@ function ManagementGrootboekPage() {
             totalPages={(mutaties as { totalPages?: number } | undefined)?.totalPages}
             onPageChange={setPage}
             emptyMessage="Geen mutaties gevonden"
+            onRowClick={(row) => {
+              const proj = String((row as Mutatie).PROJECT ?? "");
+              if (proj) router.push(`/management/${db}/${encodeURIComponent(proj)}`);
+            }}
           />
         </TabsContent>
 

@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { facturenApi } from "@/lib/api-client";
 import { formatDate, formatCurrency, formatDaysOverdue } from "@/lib/format";
@@ -53,6 +54,23 @@ const columns: ColumnDef<Factuur>[] = [
   { accessorKey: "STATUS", header: "Status", cell: ({ getValue }) => <StatusBadge status={String(getValue() ?? "")} /> },
 ];
 
+const mgmColumns: ColumnDef<Factuur>[] = [
+  { accessorKey: "PROJECT",      header: "Project",     size: 130, cell: ({ getValue }) => {
+    const v = String(getValue() ?? "");
+    return v ? <span className="font-mono text-xs text-muted-foreground">{v}</span> : <span className="text-muted-foreground">—</span>;
+  }},
+  { accessorKey: "KLANT",        header: "Klant" },
+  { accessorKey: "DATUM",        header: "Datum",       cell: ({ getValue }) => formatDate(String(getValue() ?? "")) },
+  { accessorKey: "VERVALDATUM",  header: "Vervaldatum", cell: ({ getValue }) => formatDate(String(getValue() ?? "")) },
+  { accessorKey: "BEDRAG_EXCL",  header: "Excl. BTW",  cell: ({ getValue }) => <span className="tabular-nums">{formatCurrency(Number(getValue() ?? 0))}</span> },
+  { accessorKey: "TOTAALBEDRAG", header: "Totaal",      cell: ({ getValue }) => <span className="tabular-nums font-medium">{formatCurrency(Number(getValue() ?? 0))}</span> },
+  { accessorKey: "OPENSTAAND",   header: "Openstaand",  cell: ({ getValue }) => {
+    const v = Number(getValue() ?? 0);
+    return <span className={`tabular-nums ${v > 0 ? "text-orange-600 font-medium" : "text-muted-foreground"}`}>{formatCurrency(v)}</span>;
+  }},
+  { accessorKey: "STATUS",       header: "Status",      cell: ({ getValue }) => <StatusBadge status={String(getValue() ?? "")} /> },
+];
+
 const AGING_LABELS: Record<string, string> = {
   current: "Niet vervallen",
   "1-30": "1–30 dagen",
@@ -70,6 +88,7 @@ const MGM_DBS = [
 // ── Management facturen (MGM rol) ─────────────────────────────────────────────
 
 function ManagementFacturenPage() {
+  const router = useRouter();
   const [db, setDb]         = useState<string>("SERVICES");
   const [page, setPage]     = useState(1);
   const [search, setSearch] = useState("");
@@ -166,7 +185,7 @@ function ManagementFacturenPage() {
           </div>
 
           <DataTable
-            columns={columns}
+            columns={mgmColumns}
             data={((list as { data?: Factuur[] } | undefined)?.data ?? []) as Factuur[]}
             loading={isLoading}
             total={(list as { total?: number } | undefined)?.total}
@@ -175,6 +194,10 @@ function ManagementFacturenPage() {
             totalPages={(list as { totalPages?: number } | undefined)?.totalPages}
             onPageChange={setPage}
             emptyMessage="Geen facturen gevonden"
+            onRowClick={(row) => {
+              const proj = String((row as Factuur).PROJECT ?? "");
+              if (proj) router.push(`/management/${db}/${encodeURIComponent(proj)}`);
+            }}
           />
         </TabsContent>
       </Tabs>
