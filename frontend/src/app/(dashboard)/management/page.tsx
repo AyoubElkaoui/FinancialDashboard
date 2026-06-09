@@ -178,7 +178,7 @@ function applyToggles(d: DbStats, toggles: Toggles) {
                + (toggles.indirect ? d.indirecteKosten  : 0)
                + (toggles.algemeen ? d.algemeenKosten   : 0);
   const marge    = d.gefactureerd - totaal;
-  const margePct = totaal > 0 ? marge / totaal * 100 : 0;
+  const margePct = d.gefactureerd > 0 ? marge / d.gefactureerd * 100 : 0;
   return { totaleKosten: totaal, brutomarge: marge, margePct };
 }
 
@@ -186,13 +186,12 @@ function applyToggles(d: DbStats, toggles: Toggles) {
 
 export default function ManagementPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<"actueel" | "historisch">("actueel");
   const [toggles, setToggles] = useState<Toggles>({ directe: true, pakbon: true, indirect: true, algemeen: true });
 
   const { data, isLoading } = useQuery<SamenvattingResponse>({
-    queryKey: ["mgm-samenvatting", status],
+    queryKey: ["mgm-samenvatting"],
     queryFn: () =>
-      fetch(`/api/v1/management/samenvatting?status=${status}`).then(r => {
+      fetch(`/api/v1/management/samenvatting?status=alle`).then(r => {
         if (!r.ok) throw new Error("Geen toegang");
         return r.json();
       }),
@@ -228,7 +227,7 @@ export default function ManagementPage() {
     }),
     { aanneemsom: 0, gefactureerd: 0, totaleKosten: 0, brutomarge: 0, actief: 0, totaal: 0, nietGefactureerd: 0 }
   );
-  const effectiefMargePct    = effectiefTotaal.totaleKosten > 0 ? effectiefTotaal.brutomarge / effectiefTotaal.totaleKosten * 100 : 0;
+  const effectiefMargePct    = effectiefTotaal.gefactureerd > 0 ? effectiefTotaal.brutomarge / effectiefTotaal.gefactureerd * 100 : 0;
   const effectiefNietGefPct  = effectiefTotaal.aanneemsom   > 0 ? effectiefTotaal.nietGefactureerd / effectiefTotaal.aanneemsom * 100 : 0;
 
   // Combined totaal for display (effective values merged with raw for non-toggle fields)
@@ -257,12 +256,6 @@ export default function ManagementPage() {
           <p className="text-sm text-muted-foreground">Geconsolideerd overzicht over alle bedrijven · Lees-alleen</p>
         </div>
 
-        {/* Filter: status */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Status:</span>
-          <FilterChip label="Actueel" active={status === "actueel"} onClick={() => setStatus("actueel")} />
-          <FilterChip label="Historisch" active={status === "historisch"} onClick={() => setStatus("historisch")} />
-        </div>
       </div>
 
       {isLoading && (
