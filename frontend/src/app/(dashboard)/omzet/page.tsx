@@ -3,6 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useViewTypeSafe } from "@/hooks/use-view-type-safe";
 import { useActiveDb } from "@/hooks/use-active-db";
+import { useRole } from "@/hooks/use-role";
+import { formatPercentage } from "@/lib/format";
 import { formatCurrency } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -317,10 +319,152 @@ function ProjectOmzetPage({ activeDb }: { activeDb: string }) {
   );
 }
 
+// ── Management Omzet view (MGM rol) ──────────────────────────────────────────
+
+interface DbStats {
+  database: string; label: string; source: string;
+  aanneemsom: number; gefactureerd: number; nogTeFactureren: number;
+  brutomarge: number; margePct: number; actief: number; totaal: number;
+}
+interface SamenvattingResponse { perDatabase: DbStats[]; totaal: DbStats & { margePct: number } }
+
+const DB_COLORS_CHART: Record<string, string> = {
+  SERVICES: "#3b82f6", MAINTENANCE: "#8b5cf6", INTERNATIONAL: "#10b981", KEYSER: "#f59e0b",
+};
+
+function ManagementOmzetPage() {
+  const { data, isLoading } = useQuery<SamenvattingResponse>({
+    queryKey: ["mgm-samenvatting"],
+    queryFn: () => fetch("/api/v1/management/samenvatting?status=alle").then(r => r.json()),
+    staleTime: 60_000,
+  });
+
+  const dbs = (data?.perDatabase ?? []).filter(d => d.source !== "not-connected");
+  const t   = data?.totaal;
+
+  const barData = dbs.map(d => ({
+    name:           d.label,
+    Aanneemsom:     d.aanneemsom,
+    Gefactureerd:   d.gefactureerd,
+    "Nog te fact.": d.aanneemsom - d.gefactureerd,
+  }));
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Omzet — Management</h1>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-8">
+      <div>
+        <h1 className="text-2xl font-bold">Omzet — Management</h1>
+        <p className="text-sm text-muted-foreground mt-1">Geconsolideerd omzetoverzicht over alle bedrijven</p>
+      </div>
+
+      {t && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Totale aanneemsom",   value: formatCurrency(t.aanneemsom),   color: "text-blue-600" },
+            { label: "Totaal gefactureerd", value: formatCurrency(t.gefactureerd), color: "text-emerald-600" },
+            { label: "Nog te factureren",   value: formatCurrency(t.aanneemsom - t.gefactureerd), color: t.aanneemsom > t.gefactureerd ? "text-orange-600" : "text-muted-foreground" },
+            { label: "Gem. marge %",        value: formatPercentage(t.gefactureerd > 0 ? t.brutomarge / t.gefactureerd * 100 : 0), color: t.brutomarge >= 0 ? "text-emerald-600" : "text-red-600" },
+          ].map(({ label, value, color }) => (
+            <Card key={label}>
+              <CardContent className="pt-4 pb-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">{label}</span>
+                <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Aanneemsom vs Gefactureerd per bedrijf</CardTitle></CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tickFormatter={v => `€${(v / 1_000_000).toFixed(0)}M`} tick={{ fontSize: 11 }} width={52} />
+              <Tooltip formatter={(v: unknown) => formatCurrency(Number(v))} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="Aanneemsom"     fill="#3b82f6" fillOpacity={0.4} radius={[4,4,0,0]} />
+              <Bar dataKey="Gefactureerd"   fill="#10b981" radius={[4,4,0,0]} />
+              <Bar dataKey="Nog te fact."   fill="#f59e0b" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Detail per bedrijf</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  {["Bedrijf", "Projecten", "Aanneemsom", "Gefactureerd", "Nog te fact.", "Brutomarge", "Marge %"].map((h, i) => (
+                    <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dbs.map(d => {
+                  const nogTeFact = d.aanneemsom - d.gefactureerd;
+                  const margePct  = d.gefactureerd > 0 ? d.brutomarge / d.gefactureerd * 100 : 0;
+                  return (
+                    <tr key={d.database} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: DB_COLORS_CHART[d.database] ?? "#64748b" }} />
+                          <span className="font-medium">{d.label}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{d.actief} actief / {d.totaal}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(d.aanneemsom)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(d.gefactureerd)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${nogTeFact > 0 ? "text-orange-600 font-medium" : "text-muted-foreground"}`}>{formatCurrency(nogTeFact)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums font-semibold ${d.brutomarge >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(d.brutomarge)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${margePct >= 15 ? "text-emerald-600 font-semibold" : margePct < 0 ? "text-red-600 font-semibold" : ""}`}>{formatPercentage(margePct)}</td>
+                    </tr>
+                  );
+                })}
+                {t && (() => {
+                  const nogTeFact = t.aanneemsom - t.gefactureerd;
+                  const margePct  = t.gefactureerd > 0 ? t.brutomarge / t.gefactureerd * 100 : 0;
+                  return (
+                    <tr className="border-t-2 bg-muted/30 font-semibold">
+                      <td className="px-4 py-3 text-muted-foreground" colSpan={2}>Totaal</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(t.aanneemsom)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(t.gefactureerd)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${nogTeFact > 0 ? "text-orange-600" : ""}`}>{formatCurrency(nogTeFact)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${t.brutomarge >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(t.brutomarge)}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${margePct >= 15 ? "text-emerald-600" : margePct < 0 ? "text-red-600" : ""}`}>{formatPercentage(margePct)}</td>
+                    </tr>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function OmzetPage() {
+  const role     = useRole();
   const viewType = useViewTypeSafe();
   const activeDb = useActiveDb();
+  if (role === "MGM") return <ManagementOmzetPage />;
   return viewType === "CUSTOMER" ? <MaintenanceOmzetPage /> : <ProjectOmzetPage activeDb={activeDb} />;
 }

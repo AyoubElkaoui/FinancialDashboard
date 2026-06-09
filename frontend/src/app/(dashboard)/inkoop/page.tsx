@@ -53,10 +53,15 @@ function InkoopInner() {
     refetchInterval,
   });
 
-  const chartData = (perKostensoort as Record<string, unknown>[] | undefined)?.map(r => ({
+  const rawChart = (perKostensoort as Record<string, unknown>[] | undefined)?.map(r => ({
     name: String(r.KOSTENSOORT ?? ""),
     value: Number(r.BEDRAG ?? 0),
   })) ?? [];
+  // Top 8 + rest samenvoegen als "Overig"
+  const sorted = [...rawChart].sort((a, b) => b.value - a.value);
+  const chartData = sorted.length > 8
+    ? [...sorted.slice(0, 8), { name: "Overig", value: sorted.slice(8).reduce((s, r) => s + r.value, 0) }]
+    : sorted;
 
   return (
     <div className="space-y-5">
@@ -75,17 +80,30 @@ function InkoopInner() {
         </div>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Verdeling dit jaar</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Verdeling dit jaar (top 8)</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={70} label={false}>
                   {chartData.map((_, i) => <Cell key={i} fill={getChartColor(i)} />)}
                 </Pie>
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             </ResponsiveContainer>
+            <div className="space-y-1 mt-1">
+              {chartData.map((d, i) => {
+                const tot = chartData.reduce((s, x) => s + x.value, 0);
+                return (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ background: getChartColor(i) }} />
+                      <span className="text-muted-foreground truncate max-w-[130px]">{d.name}</span>
+                    </span>
+                    <span className="tabular-nums ml-1 shrink-0">{tot > 0 ? (d.value / tot * 100).toFixed(0) : 0}%</span>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       </div>
