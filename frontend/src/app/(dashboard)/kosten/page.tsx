@@ -64,8 +64,9 @@ function ProjectKostenPage({ activeDb }: { activeDb: string }) {
     queryFn:  () => inkoopApi.perKostensoort() as Promise<KostensoortRow[]>,
   });
 
-  const rows = data ?? [];
-  const totaal = rows.reduce((s, r) => s + r.BEDRAG, 0);
+  const rawRows = data ?? [];
+  const totaal = rawRows.reduce((s, r) => s + r.BEDRAG, 0);
+  const rows = rawRows.map(r => ({ ...r, PCT: totaal > 0 ? (r.BEDRAG / totaal) * 100 : 0 }));
 
   return (
     <div className="space-y-6">

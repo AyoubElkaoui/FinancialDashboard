@@ -41,6 +41,21 @@ const NAV_CUSTOMER = [
   { href: "/instellingen", label: "Instellingen", icon: Settings2 },
 ];
 
+// Nav voor pure MGM gebruikers — management eerst, daarna reguliere analyse-pagina's
+const NAV_MGM = [
+  { href: "/management",  label: "Management",   icon: PieChart },
+  { href: "/projecten",   label: "Projecten",    icon: FolderKanban },
+  { href: "/omzet",       label: "Omzet",        icon: TrendingUp },
+  { href: "/kosten",      label: "Kosten",        icon: Receipt },
+  { href: "/inkoop",      label: "Inkoop",        icon: ShoppingCart },
+  { href: "/facturen",    label: "Facturen",      icon: FileText },
+  { href: "/grootboek",   label: "Grootboek",     icon: BookOpen },
+  { href: "/rapportages", label: "Rapportages",   icon: BarChart3 },
+  { href: "/faq",         label: "FAQ",           icon: HelpCircle },
+  { href: "/instellingen", label: "Instellingen", icon: Settings2 },
+];
+
+// Extra item voor ADMIN/MGM die ook de reguliere nav zien (sidebar-sectie Management)
 const MGM_NAV = [
   { href: "/management", label: "Management", icon: PieChart },
 ];
@@ -83,12 +98,14 @@ export function Sidebar() {
     staleTime: 60_000,
   });
 
-  const isAdmin  = user?.role === "ADMIN";
-  const isMgm    = user?.role === "MGM" || user?.role === "ADMIN";
-  const logoSrc  = getLogo(user?.email);
-  const viewType = useViewTypeSafe();
-  const activeDb = useActiveDb();
-  const NAV      = viewType === "CUSTOMER" ? NAV_CUSTOMER : NAV_PROJECT;
+  const isAdmin   = user?.role === "ADMIN";
+  const isMgmOnly = user?.role === "MGM"; // MGM maar geen ADMIN
+  const isMgm     = user?.role === "MGM" || user?.role === "ADMIN";
+  const logoSrc   = getLogo(user?.email);
+  const viewType  = useViewTypeSafe();
+  const activeDb  = useActiveDb();
+  // MGM-only gebruikers krijgen een management-gerichte nav
+  const NAV = isMgmOnly ? NAV_MGM : (viewType === "CUSTOMER" ? NAV_CUSTOMER : NAV_PROJECT);
 
   return (
     <aside
@@ -129,14 +146,16 @@ export function Sidebar() {
             Navigatie
           </p>
         )}
-        {NAV.map(({ href, label, icon: Icon, exact }) => {
+        {NAV.map(({ href, label, icon: Icon, ...rest }) => {
+          const exact = "exact" in rest ? (rest as { exact?: boolean }).exact : false;
           const active = exact ? pathname === href : pathname.startsWith(href);
           return (
             <NavLink key={href} href={href} label={label} icon={Icon} active={active} collapsed={collapsed} />
           );
         })}
 
-        {isMgm && (
+        {/* Toon aparte Management-sectie alleen voor ADMIN — MGM-only ziet /management al in hoofdnav */}
+        {isAdmin && (
           <>
             {!collapsed && (
               <p className="text-[10px] font-semibold uppercase tracking-widest px-2 pb-2 pt-4" style={{ color: "#374e6a" }}>

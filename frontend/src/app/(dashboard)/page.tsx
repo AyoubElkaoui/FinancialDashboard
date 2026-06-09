@@ -18,7 +18,7 @@ import { CHART_COLORS, getChartColor } from "@/lib/chart-colors";
 import {
   TrendingUp, FolderKanban, ClipboardList,
   AlertCircle, Euro, ArrowRight, CheckCircle2,
-  Users, Clock, Activity, RefreshCw,
+  Users, Clock, Activity, RefreshCw, Loader2,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useActiveDb } from "@/hooks/use-active-db";
@@ -123,7 +123,27 @@ function SectionHeader({ title, description, href, router }: { title: string; de
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { data: me } = useQuery<{ role: string }>({
+    queryKey: ["me"],
+    queryFn:  () => fetch("/api/auth/me").then(r => r.json()),
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (me?.role === "MGM") router.replace("/management");
+  }, [me?.role, router]);
+
   const viewType = useViewTypeSafe();
+
+  if (me?.role === "MGM") {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return viewType === "CUSTOMER" ? <MaintenanceDashboard /> : <ProjectDashboard />;
 }
 
