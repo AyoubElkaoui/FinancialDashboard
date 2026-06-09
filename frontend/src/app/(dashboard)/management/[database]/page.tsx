@@ -96,7 +96,7 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
   const { database } = use(params);
   const router = useRouter();
 
-  const [status, setStatus]               = useState<"actueel" | "historisch">("actueel");
+  const [status, setStatus]               = useState<"alle" | "actueel" | "historisch">("alle");
   const [page, setPage]                   = useState(1);
   const [search, setSearch]               = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -117,7 +117,7 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
         database,
         pageSize:    String(PAGE_SIZE),
         page:        String(page),
-        verbergLeeg: "true",
+        verbergLeeg: "false",   // toon alle projecten, ook zonder financiële data
         status,
       });
       if (debouncedSearch) p.set("search", debouncedSearch);
@@ -166,6 +166,7 @@ export default function ManagementDatabasePage({ params }: { params: Promise<{ d
       {/* ── Filters ── */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Status:</span>
+        <FilterChip label="Alle"       active={status === "alle"}       onClick={() => setStatus("alle")} />
         <FilterChip label="Actueel"    active={status === "actueel"}    onClick={() => setStatus("actueel")} />
         <FilterChip label="Historisch" active={status === "historisch"} onClick={() => setStatus("historisch")} />
         <div className="flex-1" />
