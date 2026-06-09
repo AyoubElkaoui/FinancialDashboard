@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { getElmarProjecten } from "@/lib/mock/elmar-data";
 import type { Database } from "@prisma/client";
 
 const ALL_DATABASES = ["SERVICES", "MAINTENANCE", "INTERNATIONAL", "KEYSER"] as const;
@@ -168,18 +167,15 @@ export async function GET(request: NextRequest) {
         stats.totaal++;
       }
     } else {
-      // Mock fallback
-      let mockProjecten = getElmarProjecten(database);
-      if (statusFilter === "actueel")    mockProjecten = mockProjecten.filter(p => p.STATUS === "ACTIEF");
-      if (statusFilter === "historisch") mockProjecten = mockProjecten.filter(p => (p.STATUS as string) === "HISTORISCH");
-      for (const p of mockProjecten) {
-        stats.aanneemsom   += p.TOTAAL_AANNEEMSOM;
-        stats.gefactureerd += p.GEFACTUREERD_TOTAAL;
-        stats.totaleKosten += p.TOTALE_KOSTEN;
-        stats.brutomarge   += p.BRUTOMARGE;
-        stats.actief       += p.STATUS === "ACTIEF" ? 1 : 0;
-        stats.totaal++;
-      }
+      // Geen data gesynchroniseerd — toon niet-gesynchroniseerd ipv mockdata
+      source = "not-connected";
+      return {
+        database, label: DB_LABELS[database], source,
+        aanneemsom: 0, gefactureerd: 0, totaleKosten: 0, brutomarge: 0,
+        margePct: 0, nietGefactureerd: 0, nietGefactureerdPct: 0,
+        actief: 0, totaal: 0,
+        directeKosten: 0, pakbonKosten: 0, indirecteKosten: 0, algemeenKosten: 0,
+      };
     }
 
     stats.nietGefactureerd = stats.aanneemsom - stats.gefactureerd;
