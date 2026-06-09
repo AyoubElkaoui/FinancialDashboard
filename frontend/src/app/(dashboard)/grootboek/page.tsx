@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { grootboekApi } from "@/lib/api-client";
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { useActiveDb } from "@/hooks/use-active-db";
+import { useRole } from "@/hooks/use-role";
 
 type Mutatie = Record<string, unknown>;
 type Resultaat = Record<string, unknown>;
@@ -55,6 +56,141 @@ const resultaatColumns: ColumnDef<Resultaat>[] = [
     },
   },
 ];
+
+const MGM_DBS = [
+  { db: "SERVICES",      label: "Elmar Services",      dot: "bg-blue-500",    badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30" },
+  { db: "MAINTENANCE",   label: "Elmar Maintenance",   dot: "bg-violet-500",  badge: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30" },
+  { db: "INTERNATIONAL", label: "Elmar International", dot: "bg-emerald-500", badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
+] as const;
+
+// ── Management grootboek (MGM rol) ────────────────────────────────────────────
+
+function ManagementGrootboekPage() {
+  const [db, setDb]         = useState<string>("SERVICES");
+  const [page, setPage]     = useState(1);
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState<string | undefined>(undefined);
+  const [dateTo, setDateTo]     = useState<string | undefined>(undefined);
+  const [rubriekCode, setRubriekCode] = useState<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState("mutaties");
+
+  const { data: rubrieken } = useQuery({
+    queryKey: ["mgm-gb-rubrieken", db],
+    queryFn: () => fetch(`/api/v1/grootboek/rubrieken?database=${db}`).then(r => r.json()),
+    staleTime: 300_000,
+  });
+
+  const { data: mutaties, isLoading: mutatiesLoading } = useQuery({
+    queryKey: ["mgm-gb-mutaties", db, page, search, dateFrom, dateTo, rubriekCode],
+    queryFn: () => {
+      const p = new URLSearchParams({ database: db, page: String(page), pageSize: "50" });
+      if (search)      p.set("search",      search);
+      if (dateFrom)    p.set("dateFrom",    dateFrom);
+      if (dateTo)      p.set("dateTo",      dateTo);
+      if (rubriekCode) p.set("rubriekCode", rubriekCode);
+      return fetch(`/api/v1/grootboek/mutaties?${p}`).then(r => r.json());
+    },
+    enabled: activeTab === "mutaties",
+  });
+
+  const { data: resultaat, isLoading: resultaatLoading } = useQuery({
+    queryKey: ["mgm-gb-resultaat", db],
+    queryFn: () => fetch(`/api/v1/grootboek/resultaat?database=${db}`).then(r => r.json()),
+    enabled: activeTab === "resultaat",
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Grootboek — Management</h1>
+          <p className="text-sm text-muted-foreground mt-1">Journaalmutaties per bedrijf</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {MGM_DBS.map(({ db: d, label, dot, badge }) => (
+            <button key={d} onClick={() => { setDb(d); setPage(1); setRubriekCode(undefined); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
+                db === d ? `${badge} border-current` : "border-border text-muted-foreground hover:bg-muted"
+              }`}>
+              <span className={`h-2 w-2 rounded-full ${dot}`} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); setPage(1); }}>
+        <TabsList>
+          <TabsTrigger value="mutaties">Mutaties</TabsTrigger>
+          <TabsTrigger value="resultaat">Resultatenrekening</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="mutaties" className="space-y-4 mt-4">
+          <div className="flex gap-2 flex-wrap">
+            <input
+              type="search"
+              placeholder="Zoek op project, rubriek, omschrijving…"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              className="h-8 w-72 rounded-md border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <input type="date" lang="nl" value={dateFrom ?? ""}
+              onChange={e => { setDateFrom(e.target.value || undefined); setPage(1); }}
+              className="h-8 rounded-md border bg-background px-2 text-sm" />
+            <span className="flex items-center text-sm text-muted-foreground">t/m</span>
+            <input type="date" lang="nl" value={dateTo ?? ""}
+              onChange={e => { setDateTo(e.target.value || undefined); setPage(1); }}
+              className="h-8 rounded-md border bg-background px-2 text-sm" />
+            <Select
+              value={rubriekCode ?? "alle"}
+              onValueChange={v => { setRubriekCode(v === "alle" ? undefined : v ?? undefined); setPage(1); }}
+            >
+              <SelectTrigger className="h-8 w-56 text-sm">
+                <SelectValue placeholder="Rubriek" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alle">Alle rubrieken</SelectItem>
+                {(rubrieken as Record<string, unknown>[] | undefined)?.map(r => (
+                  <SelectItem key={String(r.REKENINGNUMMER)} value={String(r.REKENINGNUMMER)} className="text-sm">
+                    {String(r.REKENINGNUMMER)} — {String(r.OMSCHRIJVING)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DataTable
+            columns={mutatieColumns}
+            data={((mutaties as { data?: Mutatie[] } | undefined)?.data ?? []) as Mutatie[]}
+            loading={mutatiesLoading}
+            total={(mutaties as { total?: number } | undefined)?.total}
+            page={page}
+            pageSize={50}
+            totalPages={(mutaties as { totalPages?: number } | undefined)?.totalPages}
+            onPageChange={setPage}
+            emptyMessage="Geen mutaties gevonden"
+          />
+        </TabsContent>
+
+        <TabsContent value="resultaat" className="mt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Resultatenrekening — huidig jaar</CardTitle></CardHeader>
+            <CardContent>
+              <DataTable
+                columns={resultaatColumns}
+                data={(resultaat as Resultaat[] | undefined) ?? []}
+                loading={resultaatLoading}
+                emptyMessage="Geen gegevens beschikbaar"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ── Reguliere grootboek ───────────────────────────────────────────────────────
 
 function GrootboekInner() {
   const { get, setParams } = useQueryParams();
@@ -175,5 +311,7 @@ function GrootboekInner() {
 }
 
 export default function GrootboekPage() {
+  const role = useRole();
+  if (role === "MGM") return <Suspense><ManagementGrootboekPage /></Suspense>;
   return <Suspense><GrootboekInner /></Suspense>;
 }

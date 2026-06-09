@@ -166,6 +166,7 @@ export async function GET(request: NextRequest) {
       GEFACTUREERD_TOTAAL: calc.gefactureerd,
       NOG_TE_FACTUREREN:   calc.nogTeFactureren,
       PCT_GEFACT:          calc.pctGefact,
+      PCT_BETAALD:         calc.pctGefact,
       TOTALE_KOSTEN:       calc.totaleKosten,
       BRUTOMARGE:          calc.brutomarge,
       MARGE_PCT:           calc.margePct,

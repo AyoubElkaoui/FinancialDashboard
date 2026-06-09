@@ -213,6 +213,9 @@ function cellValue(p: ElmarProjectSummary, col: SsCol): React.ReactNode {
     return <span className={cls}>{formatCurrency(n)}</span>;
   }
   if (col.pct) {
+    if (raw == null || (typeof raw === "number" && !isFinite(raw))) {
+      return <span className="text-muted-foreground">n.v.t.</span>;
+    }
     const n = Number(raw);
     const cls = col.colored ? margeCls(n) : betaaldCls(n);
     return <span className={cls}>{formatPercentage(n)}</span>;

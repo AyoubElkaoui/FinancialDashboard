@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { inkoopApi } from "@/lib/api-client";
 import { formatCurrency, formatPercentage } from "@/lib/format";
 import { useActiveDb } from "@/hooks/use-active-db";
@@ -46,6 +47,7 @@ const DB_COLORS: Record<string, string> = {
 };
 
 function ManagementKostenPage() {
+  const router = useRouter();
   const { data, isLoading } = useQuery<SamenvattingResponse>({
     queryKey: ["mgm-samenvatting"],
     queryFn: () => fetch("/api/v1/management/samenvatting?status=alle").then(r => r.json()),
@@ -189,7 +191,7 @@ function ManagementKostenPage() {
               </thead>
               <tbody>
                 {dbs.map(d => (
-                  <tr key={d.database} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={d.database} onClick={() => router.push(`/management/${d.database}`)} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ background: DB_COLORS[d.database] ?? "#64748b" }} />
