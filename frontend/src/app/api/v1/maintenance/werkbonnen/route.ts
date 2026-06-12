@@ -80,11 +80,10 @@ export async function GET(req: NextRequest) {
     WERK_CODE:         wb.werkCode ?? "",
     IS_GEFACTUREERD:   wb.isGefactureerd,
     VOLLEDIG_BETAALD:  wb.volledigBetaald ?? false,
-    // Financieel uit DB
+    // Financieel uit DB — alleen per-bon uren (via AT_URENBREG.WERKBON_GC_ID)
     OPBRENGSTEN:       Number(wb.opbrengsten ?? 0),
-    UREN_WERKBON:      wb.urenWerkbon  != null ? Number(wb.urenWerkbon)  : null,
-    UREN_CONTRACT:     wb.urenContract != null ? Number(wb.urenContract) : null,
-    // Berekend: gebruik bon-uren als beschikbaar, anders contract-uren als indicatie
+    UREN_WERKBON:      wb.urenWerkbon != null ? Number(wb.urenWerkbon) : null,
+    // Berekend: indirect alleen op basis van bon-uren (geen contracttotaal)
     INDIRECT:          wb.urenWerkbon != null ? Number(wb.urenWerkbon) * 7.5 : null,
     B_MARGE:           wb.urenWerkbon != null
                          ? Number(wb.opbrengsten ?? 0) - Number(wb.urenWerkbon) * 7.5

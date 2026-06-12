@@ -1,8 +1,7 @@
 /**
- * Maintenance omzet + werkbon-tellingen.
- * Omzetbron: rm_werkbon.opbrengsten (AT_KLNTBREG per bon, 100% dekking).
- * Dit is de juiste bron voor Maintenance: facturatie per werkbon.
- * rm_journaal is niet gesyncet voor MAINTENANCE.
+ * Maintenance omzet — bron: rm_journaal (AT_JOURNAAL + AT_VERKFACT).
+ * Rubrieken: 8020 (Periodiek) + 8300 (Service). Datumveld = DATUM_FACT.
+ * Geverifieerd: 2026 totaal = €109.178,27 (8020: €70.300,20 + 8300: €38.878,07).
  */
 import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
@@ -10,7 +9,8 @@ import { getSession } from "@/lib/session";
 
 const safe = (v: string | null | undefined) => parseFloat(v ?? "0") || 0;
 const MAAND_NL = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
-const BEDRIJF_START = "2026-04-06"; // data vóór deze datum uitsluiten
+const BEDRIJF_START = "2026-04-06";
+const OMZET_RUBRIEKEN = ["8020", "8300"];
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -20,21 +20,20 @@ export async function GET(req: NextRequest) {
   const database = s.get("database") ?? "MAINTENANCE";
   const periode  = s.get("periode") ?? "maand";
 
-  const now = new Date();
-
   if (periode === "maand") {
-    // Opbrengsten per kalendermaand (rm_werkbon.opbrengsten) + werkbon-tellingen
-    type MaandRow = { jaar: string; maand: string; opbrengsten: string | null };
+    type MaandRow = { jaar: string; maand: string; rubriek: string; omzet: string | null };
     const omzetRows = await db.$queryRaw<MaandRow[]>`
       SELECT EXTRACT(YEAR FROM datum)::text  AS jaar,
              EXTRACT(MONTH FROM datum)::text AS maand,
-             SUM(opbrengsten)::text          AS opbrengsten
-      FROM rm_werkbon
+             rubriek_code                   AS rubriek,
+             SUM(bedrag)::text              AS omzet
+      FROM rm_journaal
       WHERE database::text = ${database}
-        AND opbrengsten > 0
+        AND debet_credit   = 'C'
+        AND rubriek_code   IN ('8020','8300')
         AND datum >= ${BEDRIJF_START}::date
-      GROUP BY jaar, maand
-      ORDER BY jaar, maand
+      GROUP BY jaar, maand, rubriek_code
+      ORDER BY jaar, maand, rubriek_code
     `.catch(() => []);
 
     type BonRow = { jaar: string; maand: string; status: string; aantal: string };
@@ -49,11 +48,20 @@ export async function GET(req: NextRequest) {
       ORDER BY jaar, maand, status
     `.catch(() => []);
 
+    // Combineer per jaar+maand
     const keySet = new Set([
       ...omzetRows.map(r => `${r.jaar}-${r.maand}`),
       ...bonRows.map(r => `${r.jaar}-${r.maand}`),
     ]);
-    const omzetMap = new Map(omzetRows.map(r => [`${r.jaar}-${r.maand}`, safe(r.opbrengsten)]));
+    // Omzet per maand per rubriek
+    const omzetMap = new Map<string, { periodiek: number; service: number }>();
+    for (const r of omzetRows) {
+      const key = `${r.jaar}-${r.maand}`;
+      if (!omzetMap.has(key)) omzetMap.set(key, { periodiek: 0, service: 0 });
+      const e = omzetMap.get(key)!;
+      if (r.rubriek === "8020") e.periodiek += safe(r.omzet);
+      else                      e.service   += safe(r.omzet);
+    }
     const bonMap = new Map<string, { uitgevoerd: number; openstaand: number; totaal: number }>();
     for (const r of bonRows) {
       const key = `${r.jaar}-${r.maand}`;
@@ -67,11 +75,13 @@ export async function GET(req: NextRequest) {
 
     const data = [...keySet].sort().map(key => {
       const [jaar, maand] = key.split("-");
+      const oz = omzetMap.get(key) ?? { periodiek: 0, service: 0 };
       return {
         label:      `${MAAND_NL[parseInt(maand) - 1]} '${jaar.slice(2)}`,
-        jaar:       parseInt(jaar),
-        maand:      parseInt(maand),
-        omzet:      omzetMap.get(key) ?? 0,
+        jaar:       parseInt(jaar), maand: parseInt(maand),
+        omzet:      oz.periodiek + oz.service,
+        periodiek:  oz.periodiek,
+        service:    oz.service,
         uitgevoerd: bonMap.get(key)?.uitgevoerd ?? 0,
         openstaand: bonMap.get(key)?.openstaand ?? 0,
         totaal:     bonMap.get(key)?.totaal ?? 0,
@@ -80,21 +90,20 @@ export async function GET(req: NextRequest) {
     return Response.json(data);
   }
 
-  // Week-modus: opbrengsten per ISO-week + werkbon-tellingen (rolling 12 weken)
-  const twaalf_weken_geleden = new Date(now);
-  twaalf_weken_geleden.setDate(now.getDate() - 84);
-
-  type WeekOmzetRow = { jaar: string; week: string; opbrengsten: string | null };
-  const omzetRows = await db.$queryRaw<WeekOmzetRow[]>`
+  // Week-modus
+  type WeekRow = { jaar: string; week: string; rubriek: string; omzet: string | null };
+  const omzetRows = await db.$queryRaw<WeekRow[]>`
     SELECT EXTRACT(YEAR FROM datum)::text AS jaar,
            EXTRACT(WEEK FROM datum)::text AS week,
-           SUM(opbrengsten)::text         AS opbrengsten
-    FROM rm_werkbon
+           rubriek_code                   AS rubriek,
+           SUM(bedrag)::text              AS omzet
+    FROM rm_journaal
     WHERE database::text = ${database}
-      AND opbrengsten > 0
+      AND debet_credit   = 'C'
+      AND rubriek_code   IN ('8020','8300')
       AND datum >= ${BEDRIJF_START}::date
-    GROUP BY jaar, week
-    ORDER BY jaar, week
+    GROUP BY jaar, week, rubriek_code
+    ORDER BY jaar, week, rubriek_code
   `.catch(() => []);
 
   type WeekBonRow = { jaar: string; week: string; status: string; aantal: string };
@@ -113,7 +122,14 @@ export async function GET(req: NextRequest) {
     ...omzetRows.map(r => `${r.jaar}-${r.week.padStart(2,"0")}`),
     ...bonRows.map(r => `${r.jaar}-${r.week.padStart(2,"0")}`),
   ]);
-  const omzetMap = new Map(omzetRows.map(r => [`${r.jaar}-${r.week.padStart(2,"0")}`, safe(r.opbrengsten)]));
+  const omzetMap = new Map<string, { periodiek: number; service: number }>();
+  for (const r of omzetRows) {
+    const key = `${r.jaar}-${r.week.padStart(2,"0")}`;
+    if (!omzetMap.has(key)) omzetMap.set(key, { periodiek: 0, service: 0 });
+    const e = omzetMap.get(key)!;
+    if (r.rubriek === "8020") e.periodiek += safe(r.omzet);
+    else                      e.service   += safe(r.omzet);
+  }
   const bonMap = new Map<string, { uitgevoerd: number; openstaand: number; aangemaakt: number }>();
   for (const r of bonRows) {
     const key = `${r.jaar}-${r.week.padStart(2,"0")}`;
@@ -126,9 +142,12 @@ export async function GET(req: NextRequest) {
 
   const data = [...keySet].sort().map(key => {
     const [, week] = key.split("-");
+    const oz = omzetMap.get(key) ?? { periodiek: 0, service: 0 };
     return {
       label:      `W${parseInt(week)}`,
-      omzet:      omzetMap.get(key) ?? 0,
+      omzet:      oz.periodiek + oz.service,
+      periodiek:  oz.periodiek,
+      service:    oz.service,
       uitgevoerd: bonMap.get(key)?.uitgevoerd ?? 0,
       openstaand: bonMap.get(key)?.openstaand ?? 0,
       aangemaakt: bonMap.get(key)?.aangemaakt ?? 0,

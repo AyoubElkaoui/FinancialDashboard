@@ -190,7 +190,7 @@ function MaintenanceKlantenInner() {
                           {fam}
                         </span>
                         <span className="ml-2 text-[11px] text-muted-foreground">
-                          {groepen.reduce((s, g) => s + g.all.totaal, 0).toLocaleString("nl-NL")} werkbonnen · {groepen.length} groepen
+                          {groepen.reduce((s, g) => s + g.all.totaal, 0)} werkbonnen · {groepen.length} groepen
                         </span>
                       </td>
                     </tr>
@@ -213,7 +213,7 @@ function MaintenanceKlantenInner() {
                       <BucketCell b={kg.maand} field="uitg" />
                       <BucketCell b={kg.jaar}  field="uitg" />
                       <BucketCell b={kg.jaar}  field="open" />
-                      <td className="px-3 py-2 text-right tabular-nums text-xs font-bold">{kg.all.totaal.toLocaleString("nl-NL")}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-xs font-bold">{kg.all.totaal}</td>
                       <td />
                     </tr>
                   );

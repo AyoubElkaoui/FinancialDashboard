@@ -101,7 +101,7 @@ export function MaintenanceDashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString("nl-NL", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}
+            <span suppressHydrationWarning>{new Date().toLocaleDateString("nl-NL", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}</span>
           </p>
         </div>
         <div className="flex items-center gap-2">

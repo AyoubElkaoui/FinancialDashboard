@@ -12,18 +12,37 @@ export async function GET(req: NextRequest) {
 
   const database = (req.nextUrl.searchParams.get("database") ?? "MAINTENANCE");
 
-  // Jaaromzet + werkbontellingen per jaar
+  // Jaaromzet uit rm_journaal (8020+8300) + werkbontellingen uit rm_werkbon
   type JaarRow = { jaar: string; omzet: string | null; bons: string };
-  const jaarRows = await db.$queryRaw<JaarRow[]>`
-    SELECT EXTRACT(YEAR FROM datum)::text AS jaar,
-           SUM(opbrengsten)::text         AS omzet,
-           COUNT(*)::text                 AS bons
-    FROM rm_werkbon
-    WHERE database::text = ${database}
-    GROUP BY jaar
-    ORDER BY jaar DESC
-    LIMIT 5
-  `.catch(() => []);
+  const [jaarOmzet, jaarBons] = await Promise.all([
+    db.$queryRaw<{ jaar: string; omzet: string | null }[]>`
+      SELECT EXTRACT(YEAR FROM datum)::text AS jaar,
+             SUM(bedrag)::text              AS omzet
+      FROM rm_journaal
+      WHERE database::text = ${database}
+        AND debet_credit = 'C'
+        AND rubriek_code IN ('8020','8300')
+      GROUP BY jaar
+      ORDER BY jaar DESC
+      LIMIT 5
+    `.catch(() => []),
+    db.$queryRaw<{ jaar: string; bons: string }[]>`
+      SELECT EXTRACT(YEAR FROM datum)::text AS jaar,
+             COUNT(*)::text                 AS bons
+      FROM rm_werkbon
+      WHERE database::text = ${database}
+      GROUP BY jaar
+      ORDER BY jaar DESC
+      LIMIT 5
+    `.catch(() => []),
+  ]);
+
+  const bonMap = new Map(jaarBons.map(r => [r.jaar, r.bons]));
+  const jaarRows: JaarRow[] = jaarOmzet.map(r => ({
+    jaar:  r.jaar,
+    omzet: r.omzet,
+    bons:  bonMap.get(r.jaar) ?? "0",
+  }));
 
   const jaarStats = jaarRows.map((r, i, arr) => {
     const omzet    = parseFloat(r.omzet ?? "0") || 0;
@@ -46,10 +65,11 @@ export async function GET(req: NextRequest) {
   const maandRows = await db.$queryRaw<MaandRow[]>`
     SELECT EXTRACT(YEAR FROM datum)::text  AS jaar,
            EXTRACT(MONTH FROM datum)::text AS maand,
-           SUM(opbrengsten)::text          AS omzet
-    FROM rm_werkbon
+           SUM(bedrag)::text               AS omzet
+    FROM rm_journaal
     WHERE database::text = ${database}
-      AND opbrengsten > 0
+      AND debet_credit = 'C'
+      AND rubriek_code IN ('8020','8300')
       AND EXTRACT(YEAR FROM datum) IN (${huidigJaar}, ${vorigJaar})
     GROUP BY jaar, maand
     ORDER BY jaar, maand

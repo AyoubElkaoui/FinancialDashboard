@@ -44,27 +44,31 @@ export async function GET(req: NextRequest) {
   ]);
 
   // Omzet — rolling vensters
-  // Omzet uit rm_werkbon.opbrengsten (AT_KLNTBREG per bon, 100% dekking)
+  // Omzet uit rm_journaal (8020 Periodiek + 8300 Service) — geverifieerde bron
   type OmzetRow = { som: string | null };
   const [omzetWeek, omzetMaand, omzetJaar, omzetVorigeM] = await Promise.all([
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
-      WHERE database::text = ${database} AND opbrengsten > 0
+      SELECT SUM(bedrag)::text AS som FROM rm_journaal
+      WHERE database::text = ${database} AND debet_credit = 'C'
+        AND rubriek_code IN ('8020','8300')
         AND datum >= ${voorWkStart} AND datum < ${voorWkEind}
     `,
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
-      WHERE database::text = ${database} AND opbrengsten > 0
+      SELECT SUM(bedrag)::text AS som FROM rm_journaal
+      WHERE database::text = ${database} AND debet_credit = 'C'
+        AND rubriek_code IN ('8020','8300')
         AND datum >= ${voorMdStart} AND datum < ${voorMdEind}
     `,
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
-      WHERE database::text = ${database} AND opbrengsten > 0
+      SELECT SUM(bedrag)::text AS som FROM rm_journaal
+      WHERE database::text = ${database} AND debet_credit = 'C'
+        AND rubriek_code IN ('8020','8300')
         AND datum >= ${startJaar}
     `,
     db.$queryRaw<OmzetRow[]>`
-      SELECT SUM(opbrengsten)::text AS som FROM rm_werkbon
-      WHERE database::text = ${database} AND opbrengsten > 0
+      SELECT SUM(bedrag)::text AS som FROM rm_journaal
+      WHERE database::text = ${database} AND debet_credit = 'C'
+        AND rubriek_code IN ('8020','8300')
         AND datum >= ${voorMdStart} AND datum < ${voorMdEind}
     `,
   ]);

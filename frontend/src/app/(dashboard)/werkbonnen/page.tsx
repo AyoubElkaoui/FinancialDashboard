@@ -265,7 +265,7 @@ interface WbRow {
   BONNUMMER: string; DATUM: string; OMSCHRIJVING: string;
   STATUS: string; STATUS_LABEL: string; METH_LABEL: string; FASE: string;
   KLANT: string; EIGENAAR: string; IS_GEFACTUREERD: boolean;
-  OPBRENGSTEN: number; UREN_WERKBON: number | null; UREN_CONTRACT: number | null;
+  OPBRENGSTEN: number; UREN_WERKBON: number | null;
   INDIRECT: number | null; B_MARGE: number | null; MARGE_PCT: number | null;
   STREEFMARGE_PCT: number | null; VOLLEDIG_BETAALD: boolean; NOTITIES: string;
 }
@@ -422,7 +422,7 @@ function MaintenanceWerkbonnenInner() {
                 <Th>Eigenaar</Th>
                 <Th>Fact.</Th>
                 <Th right>Opbrengst</Th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-muted-foreground text-right whitespace-nowrap cursor-help" title="Uren: exacte bon-uren (vet) of contract-totaal als indicatie (~)">Uren</th>
+                <Th right>Uren</Th>
                 <Th right>B Marge</Th>
                 <Th>{""}</Th>
               </tr>
@@ -458,19 +458,10 @@ function MaintenanceWerkbonnenInner() {
                         ? <span className="font-medium">{fmt(wb.OPBRENGSTEN)}</span>
                         : <span className="text-muted-foreground/40 text-[10px]">—</span>}
                     </td>
-                    {/* Uren: bon-niveau indien beschikbaar, anders contract-totaal als indicatie */}
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs" title={
-                      wb.UREN_WERKBON != null
-                        ? `${wb.UREN_WERKBON.toFixed(1)}u op deze bon`
-                        : wb.UREN_CONTRACT != null
-                          ? `${wb.UREN_CONTRACT.toFixed(0)}u totaal op contract (niet per bon)`
-                          : "Geen uren"
-                    }>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
                       {wb.UREN_WERKBON != null
-                        ? <span className="text-slate-700 dark:text-slate-300">{wb.UREN_WERKBON.toFixed(1)}</span>
-                        : wb.UREN_CONTRACT != null
-                          ? <span className="text-muted-foreground text-[10px]">~{wb.UREN_CONTRACT.toFixed(0)}</span>
-                          : <span className="text-muted-foreground/40 text-[10px]">—</span>}
+                        ? wb.UREN_WERKBON.toFixed(1)
+                        : <span className="text-muted-foreground/40">—</span>}
                     </td>
                     <td className={`px-3 py-2.5 text-right tabular-nums text-xs font-semibold ${wb.B_MARGE != null ? (wb.B_MARGE >= 0 ? "text-emerald-600" : "text-red-600") : ""}`}>
                       {wb.B_MARGE != null
